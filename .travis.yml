@@ -1,0 +1,14 @@
+language: python
+
+services:
+  - docker
+
+before_install:
+- pip install DockerBuildManagement
+- dbm -swarm -start
+
+script:
+- dbm -test container
+
+after_script:
+- dbm -swarm -stop

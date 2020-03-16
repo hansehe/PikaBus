@@ -1,0 +1,32 @@
+build:
+    selections:
+        install-dep:
+            cmd:
+                - pip install -r requirements.txt
+                - pip install twine wheel
+        python:
+            cmd:
+                - python setup.py bdist_wheel
+                - twine check dist/*
+
+test:
+    selections:
+        python:
+            cmd:
+                - python -m unittest discover -p *Test*.py
+        container:
+            files:
+                - docker-compose.test.yml
+
+publish:
+    selections:
+        python:
+            cmd:
+                - twine upload dist/*
+
+swarm:
+    selections:
+        python:
+            directory: ServiceDependencies
+            files:
+                - swarm-management.yml

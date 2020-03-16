@@ -1,0 +1,13 @@
+version: '3'
+
+services:  
+  tests:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    networks:
+      - backend_network
+
+networks:
+  backend_network:
+    external: true
