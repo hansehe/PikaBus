@@ -51,7 +51,7 @@ connParams = pika.ConnectionParameters(
     credentials=credentials)
 
 # Create a PikaBusSetup instance with a listener queue, and add the message handler method.
-pikaBusSetup: AbstractPikaBusSetup = PikaBusSetup(connParams, listenerQueue='myQueue')
+pikaBusSetup: AbstractPikaBusSetup = PikaBusSetup(connParams, defaultListenerQueue='myQueue')
 pikaBusSetup.AddMessageHandler(messageHandlerMethod)
 
 # Start consuming messages from the queue.

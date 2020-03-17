@@ -32,10 +32,9 @@ class PikaBus(AbstractPikaBus):
             PikaTools.SafeCloseConnection(self._connection)
 
     def Send(self, payload: dict, queue: str = None, headers: dict = {}, messageType: str = None, exchange: str = None):
+        queue = self._SafeGetQueue(queue)
         if exchange is None:
             exchange = self._directExchange
-        if queue is None:
-            queue = self._listenerQueue
         self._SendOrPublish(PikaConstants.INTENT_COMMAND, payload, queue, exchange,
                             headers=headers,
                             messageType=messageType)
@@ -50,7 +49,7 @@ class PikaBus(AbstractPikaBus):
     def Reply(self, payload: dict, headers: dict = {}, messageType: str = None, exchange: str = None):
         replyToAddressHeaderKey = self._pikaProperties.replyToAddressHeaderKey
         if PikaConstants.DATA_KEY_INCOMING_MESSAGE not in self._data:
-            msg = 'Cannot perform a perform a reply outside of a message transaction.'
+            msg = 'Cannot perform a reply outside of a message transaction.'
             self._logger.exception(msg)
             raise Exception(msg)
         incomingMessageHeaders: dict = self._data[PikaConstants.DATA_KEY_INCOMING_MESSAGE][PikaConstants.DATA_KEY_HEADER_FRAME].headers
@@ -67,11 +66,12 @@ class PikaBus(AbstractPikaBus):
         headers.setdefault(self._pikaProperties.deferredTimeHeaderKey, self._pikaProperties.DatetimeToString(deferredTime))
         self.Send(payload, queue=queue, headers=headers, messageType=messageType, exchange=exchange)
 
-    def Subscribe(self, topic: str, exchange: str = None):
+    def Subscribe(self, topic: str, queue: str = None, exchange: str = None):
+        queue = self._SafeGetQueue(queue)
         if exchange is None:
             exchange = self._topicExchange
         PikaTools.CreateExchange(self._channel, exchange, exchangeType='topic')
-        PikaTools.BindQueue(self._channel, self._listenerQueue, exchange, topic)
+        PikaTools.BindQueue(self._channel, queue, exchange, topic)
 
     def StartTransaction(self):
         self._data.setdefault(PikaConstants.DATA_KEY_OUTGOING_MESSAGES, [])
@@ -80,6 +80,15 @@ class PikaBus(AbstractPikaBus):
     def CommitTransaction(self):
         PikaOutgoing.SendOrPublishOutgoingMessages(self._data)
         self._transaction = False
+
+    def _SafeGetQueue(self, queue: str):
+        if queue is None:
+            if self._listenerQueue is None:
+                msg = f'Cannot use local listener queue when it is not defined!'
+                self._logger.exception(msg)
+                raise Exception(msg)
+            queue = self._listenerQueue
+        return queue
 
     def _SendOrPublish(self, intent: str, payload: dict, topicOrQueue: str, exchange: str, headers: dict = {}, messageType: str = None):
         if self._transaction:

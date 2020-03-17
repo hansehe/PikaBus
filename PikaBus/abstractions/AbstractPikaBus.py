@@ -48,9 +48,10 @@ class AbstractPikaBus(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def Subscribe(self, topic: str, exchange: str = None):
+    def Subscribe(self, topic: str, queue: str = None, exchange: str = None):
         """
         :param str topic: Subscribed topic
+        :param str queue: Queue to bind the topic. If None, then default listener queue is used.
         :param exchange: Optional exchange to override with.
         """
         pass
