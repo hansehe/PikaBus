@@ -18,7 +18,7 @@ from PikaBus.tools import PikaSteps, PikaConstants, PikaTools
 
 class PikaBusSetup(AbstractPikaBusSetup):
     def __init__(self, connParams: pika.ConnectionParameters,
-                 listenerQueue: str = None,
+                 defaultListenerQueue: str = None,
                  directExchange: str = 'PikaBusDirect',
                  topicExchange: str = 'PikaBusTopic',
                  pikaSerializer: AbstractPikaSerializer = None,
@@ -29,7 +29,7 @@ class PikaBusSetup(AbstractPikaBusSetup):
                  logger=logging.getLogger(__name__)):
         """
         :param pika.ConnectionParameters connParams: Pika connection parameters.
-        :param str listenerQueue: Pika listening queue to received messages. Set to None to act purely as a publisher.
+        :param str defaultListenerQueue: Pika default listener queue to receive messages. Set to None to act purely as a publisher.
         :param str directExchange: Command exchange to publish direct command messages. The command pattern is used to directly sending a message to one consumer.
         :param str topicExchange: Event exchange to publish event messages. The event pattern is used to publish a message to any listening consumers.
         :param PikaBus.abstractions.AbstractPikaSerializer.AbstractPikaSerializer pikaSerializer: Optional serializer override.
@@ -51,7 +51,7 @@ class PikaBusSetup(AbstractPikaBusSetup):
             retryParams = {'tries': -1, 'delay': 1, 'max_delay': 10, 'backoff': 1, 'jitter': 1}
 
         self._connParams = connParams
-        self._listenerQueue = listenerQueue
+        self._defaultListenerQueue = defaultListenerQueue
         self._directExchange = directExchange
         self._topicExchange = topicExchange
         self._pikaSerializer = pikaSerializer
@@ -81,15 +81,17 @@ class PikaBusSetup(AbstractPikaBusSetup):
     def messageHandlers(self):
         return self._messageHandlers
 
-    def Start(self):
-        self._AssertListenerQueueIsSet()
+    def Start(self, listenerQueue: str = None):
+        listenerQueue = self._AssertListenerQueueIsSet(listenerQueue)
         with pika.BlockingConnection(self._connParams) as connection:
             channelId = str(uuid.uuid1())
-            onMessageCallback = functools.partial(
-                self._OnMessageCallBack, connection=connection, channelId=channelId)
+            onMessageCallback = functools.partial(self._OnMessageCallBack,
+                                                  connection=connection,
+                                                  channelId=channelId,
+                                                  listenerQueue=listenerQueue)
             channel: pika.adapters.blocking_connection.BlockingChannel = connection.channel()
-            PikaTools.CreateDurableQueue(channel, self._listenerQueue)
-            channel.basic_consume(self._listenerQueue, onMessageCallback)
+            PikaTools.CreateDurableQueue(channel, listenerQueue)
+            channel.basic_consume(listenerQueue, onMessageCallback)
             self._openChannels[channelId] = channel
             self._openConnections[channelId] = connection
             self._logger.info(f'Starting new consumer channel with id {channelId} '
@@ -134,31 +136,35 @@ class PikaBusSetup(AbstractPikaBusSetup):
 
     def StartAsync(self,
                    consumers: int = 1,
+                   listenerQueue: str = None,
                    loop: asyncio.AbstractEventLoop = None,
                    executor: ThreadPoolExecutor = None):
-        self._AssertListenerQueueIsSet()
-        self._AssertConnection(createListenerQueueOnConnected=True)
+        listenerQueue = self._AssertListenerQueueIsSet(listenerQueue)
+        self._AssertConnection(listenerQueue=listenerQueue,
+                               createListenerQueueOnConnected=True)
         if loop is None:
             loop = asyncio.get_event_loop()
         tasks = []
         for i in range(consumers):
-            func = functools.partial(self._StartConsumerWithRetryHandler)
+            func = functools.partial(self._StartConsumerWithRetryHandler,
+                                     listenerQueue=listenerQueue)
             task = loop.run_in_executor(executor, func)
             futureTask = asyncio.ensure_future(task, loop=loop)
             tasks.append(futureTask)
         return tasks
 
-    def CreateBus(self):
+    def CreateBus(self, listenerQueue: str = None):
         connection = pika.BlockingConnection(self._connParams)
         channel = connection.channel()
-        data = self._CreateDefaultDataHolder(connection, channel)
+        listenerQueue = self._GetListenerQueue(listenerQueue)
+        data = self._CreateDefaultDataHolder(connection, channel, listenerQueue)
         pikaBus: AbstractPikaBus = self._pikaBusCreateMethod(data=data, closeConnectionOnDelete=True)
         return pikaBus
 
     def AddMessageHandler(self, messageHandler: AbstractPikaMessageHandler):
         self._messageHandlers.append(messageHandler)
 
-    def _StartConsumerWithRetryHandler(self):
+    def _StartConsumerWithRetryHandler(self, listenerQueue: str):
         retryException = pika.exceptions.AMQPConnectionError
         tries = self._retryParams.get('tries', -1)
         while tries:
@@ -171,16 +177,16 @@ class PikaBusSetup(AbstractPikaBusSetup):
                                  jitter=self._retryParams.get('jitter', 1),
                                  logger=self._logger)
             try:
-                return self.Start()
+                return self.Start(listenerQueue)
             except retryException as exception:
                 self._logger.exception(f'{str(type(exception))}: {str(exception)}')
             tries -= 1
 
-    def _AssertConnection(self, createListenerQueueOnConnected = False):
+    def _AssertConnection(self, listenerQueue: str = None, createListenerQueueOnConnected = False):
         with pika.BlockingConnection(self._connParams) as connection:
             channel: pika.adapters.blocking_connection.BlockingChannel = connection.channel()
             if createListenerQueueOnConnected:
-                PikaTools.CreateDurableQueue(channel, self._listenerQueue)
+                PikaTools.CreateDurableQueue(channel, listenerQueue)
 
     def _BuildPikaPipeline(self):
         pipeline = [
@@ -198,9 +204,10 @@ class PikaBusSetup(AbstractPikaBusSetup):
                            headerFrame: frame.Header,
                            body: bytes,
                            connection: pika.BlockingConnection,
-                           channelId: str):
+                           channelId: str,
+                           listenerQueue: str):
         self._logger.debug(f"Received new message on channel {channelId}")
-        data = self._CreateDefaultDataHolder(connection, channel)
+        data = self._CreateDefaultDataHolder(connection, channel, listenerQueue)
         data[PikaConstants.DATA_KEY_MESSAGE_HANDLERS] = list(self.messageHandlers)
         incomingMessage = {
             PikaConstants.DATA_KEY_METHOD_FRAME: methodFrame,
@@ -218,9 +225,10 @@ class PikaBusSetup(AbstractPikaBusSetup):
 
     def _CreateDefaultDataHolder(self,
                                  connection: pika.BlockingConnection,
-                                 channel: pika.adapters.blocking_connection.BlockingChannel):
+                                 channel: pika.adapters.blocking_connection.BlockingChannel,
+                                 listenerQueue: str):
         data = {
-            PikaConstants.DATA_KEY_LISTENING_QUEUE: self._listenerQueue,
+            PikaConstants.DATA_KEY_LISTENING_QUEUE: listenerQueue,
             PikaConstants.DATA_KEY_DIRECT_EXCHANGE: self._directExchange,
             PikaConstants.DATA_KEY_TOPIC_EXCHANGE: self._topicExchange,
             PikaConstants.DATA_KEY_CONNECTION: connection,
@@ -233,11 +241,18 @@ class PikaBusSetup(AbstractPikaBusSetup):
         }
         return data
 
-    def _AssertListenerQueueIsSet(self):
-        if self._listenerQueue is None:
+    def _GetListenerQueue(self, listenerQueue: str = None):
+        if listenerQueue is None:
+            listenerQueue = self._defaultListenerQueue
+        return listenerQueue
+
+    def _AssertListenerQueueIsSet(self, listenerQueue: str):
+        listenerQueue = self._GetListenerQueue(listenerQueue)
+        if listenerQueue is None:
             msg = "Listening queue is not set, so you cannot start the listener process."
             self._logger.exception(msg)
             raise Exception(msg)
+        return listenerQueue
 
     def _DefaultPikaBusCreator(self, data: dict, closeConnectionOnDelete: bool = False):
         return PikaBus.PikaBus(data=data, closeConnectionOnDelete=closeConnectionOnDelete)

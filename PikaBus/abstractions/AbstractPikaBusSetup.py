@@ -35,8 +35,9 @@ class AbstractPikaBusSetup(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def Start(self):
+    def Start(self, listenerQueue: str = None):
         """
+        :param str listenerQueue: Optional listener queue to override default listener queue.
         Start blocking bus consumer channel.
         """
         pass
@@ -52,11 +53,13 @@ class AbstractPikaBusSetup(abc.ABC):
     @abc.abstractmethod
     def StartAsync(self,
                    consumers: int = 1,
+                   listenerQueue: str = None,
                    loop: asyncio.AbstractEventLoop = None,
                    executor: concurrent.futures.ThreadPoolExecutor = None):
         """
         Start consumers as asynchronous tasks.
         :param int consumers: Number of consumers to start.
+        :param str listenerQueue: Optional listener queue to override default listener queue.
         :param asyncio.AbstractEventLoop loop: Event loop. Defaults to current event loop if None.
         :param executor: concurrent.futures.ThreadPoolExecutor executor: Executor. Defaults to current executor if None.
         :rtype: [concurrent.futures.Future]
@@ -64,9 +67,10 @@ class AbstractPikaBusSetup(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def CreateBus(self):
+    def CreateBus(self, listenerQueue: str = None):
         """
         Create bus with separate channel.
+        :param str listenerQueue: Optional listener queue to override default listener queue.
         :rtype: PikaBus.abstractions.AbstractPikaBus.AbstractPikaBus
         """
         pass

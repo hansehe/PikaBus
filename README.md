@@ -93,6 +93,8 @@ loop.run_until_complete(asyncio.gather(*consumingTasks))
   - `python ./Examples/basic_example.py`
   - Try restarting RabbitMq to notice how PikaBus tolerates downtime:
     - `dbm -swarm -restart`
+  - Send more messages to the running PikaBus consumer with:
+    - `python ./Examples/send_example.py`
 
 ## Development
 
