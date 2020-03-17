@@ -92,8 +92,9 @@ class PikaProperties(AbstractPikaProperties):
         headers: dict = outgoingMessage[PikaConstants.DATA_KEY_HEADERS]
         headers.setdefault(self.messageIdHeaderKey, str(uuid.uuid1()))
         headers.setdefault(self.timeSentHeaderKey, self.DatetimeToString())
-        headers.setdefault(self.replyToAddressHeaderKey, data[PikaConstants.DATA_KEY_LISTENING_QUEUE])
-        headers.setdefault(self.originatingAddressHeaderKey, data[PikaConstants.DATA_KEY_LISTENING_QUEUE])
+        if data[PikaConstants.DATA_KEY_LISTENING_QUEUE] is not None:
+            headers.setdefault(self.replyToAddressHeaderKey, data[PikaConstants.DATA_KEY_LISTENING_QUEUE])
+            headers.setdefault(self.originatingAddressHeaderKey, data[PikaConstants.DATA_KEY_LISTENING_QUEUE])
         headers.setdefault(self.intentHeaderKey, outgoingMessage[PikaConstants.DATA_KEY_INTENT])
 
     def _TrySetMessageType(self, outgoingMessage: dict):
@@ -124,4 +125,5 @@ class PikaProperties(AbstractPikaProperties):
         if exception is not None:
             errorDetails = ''.join(traceback.format_exception(type(exception), exception, exception.__traceback__))
             headers.setdefault(self.errorDetailsHeaderKey, errorDetails)
-            headers.setdefault(self.sourceQueueHeaderKey, data[PikaConstants.DATA_KEY_LISTENING_QUEUE])
+            if data[PikaConstants.DATA_KEY_LISTENING_QUEUE] is not None:
+                headers.setdefault(self.sourceQueueHeaderKey, data[PikaConstants.DATA_KEY_LISTENING_QUEUE])

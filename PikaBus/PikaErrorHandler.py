@@ -44,7 +44,7 @@ class PikaErrorHandler(AbstractPikaErrorHandler):
         messageId = updatedHeaders.get(pikaProperties.messageIdHeaderKey, None)
         self._logger.info(f'Handling failed message with id {messageId} for the {retries} time.')
 
-        if retries > self._maxRetries >= 0:
+        if retries > self._maxRetries >= 0 or destinationQueue is None:
             destinationQueue = self._errorQueue
             PikaTools.CreateDurableQueue(channel, destinationQueue)
             self._logger.info(f'Moving failed message with id {messageId} '
