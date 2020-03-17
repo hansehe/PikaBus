@@ -4,6 +4,30 @@ from PikaBus.tools import PikaConstants, PikaTools
 import pika
 
 
+def ResendMessage(data: dict,
+                  intent: str = PikaConstants.INTENT_COMMAND,
+                  destinationQueue: str = None,
+                  body: bytes = None,
+                  headers: dict = None,
+                  exchange: str = None,
+                  exception: Exception = None):
+    if destinationQueue is None:
+        destinationQueue: str = data[PikaConstants.DATA_KEY_LISTENING_QUEUE]
+    if body is None:
+        body = data[PikaConstants.DATA_KEY_INCOMING_MESSAGE][PikaConstants.DATA_KEY_BODY]
+    if headers is None:
+        headers = data[PikaConstants.DATA_KEY_INCOMING_MESSAGE][PikaConstants.DATA_KEY_HEADER_FRAME].headers
+    outgoingMessage = GetOutgoingMessage(data, destinationQueue,
+                                         intent=intent,
+                                         headers=headers,
+                                         exchange=exchange,
+                                         exception=exception)
+
+    outgoingMessage[PikaConstants.DATA_KEY_BODY] = body
+    outgoingMessage[PikaConstants.DATA_KEY_CONTENT_TYPE] = None
+    SendOrPublishOutgoingMessage(data, outgoingMessage)
+
+
 def SendOrPublishOutgoingMessages(data: dict):
     outgoingMessages = data[PikaConstants.DATA_KEY_OUTGOING_MESSAGES]
     for outgoingMessage in outgoingMessages:
@@ -11,6 +35,7 @@ def SendOrPublishOutgoingMessages(data: dict):
 
 
 def SendOrPublishOutgoingMessage(data: dict, outgoingMessage: dict):
+    logger = data[PikaConstants.DATA_KEY_LOGGER]
     channel: pika.adapters.blocking_connection.BlockingChannel = data[PikaConstants.DATA_KEY_CHANNEL]
     propertyBuilder: AbstractPikaProperties = data[PikaConstants.DATA_KEY_PROPERTY_BUILDER]
     properties = propertyBuilder.GetPikaProperties(data, outgoingMessage)
@@ -27,7 +52,9 @@ def SendOrPublishOutgoingMessage(data: dict, outgoingMessage: dict):
             exchange = data[PikaConstants.DATA_KEY_DIRECT_EXCHANGE]
         PikaTools.BasicSend(channel, exchange, topicOrQueue, body, properties=properties)
     else:
-        raise Exception(f'Outgoing type {intent} is not implemented!')
+        msg = f'Outgoing type {intent} is not implemented!'
+        logger.exception(msg)
+        raise Exception(msg)
 
 
 def AppendOutgoingMessage(data: dict, payload: dict, topicOrQueue: str,

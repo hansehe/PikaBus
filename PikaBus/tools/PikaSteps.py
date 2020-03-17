@@ -3,7 +3,8 @@ from pika import frame
 from PikaBus.abstractions.AbstractPikaBus import AbstractPikaBus
 from PikaBus.abstractions.AbstractPikaErrorHandler import AbstractPikaErrorHandler
 from PikaBus.abstractions.AbstractPikaMessageHandler import AbstractPikaMessageHandler
-from PikaBus.tools import PikaConstants
+from PikaBus.abstractions.AbstractPikaProperties import AbstractPikaProperties
+from PikaBus.tools import PikaConstants, PikaOutgoing
 
 
 def HandleNextStep(pipelineIterator: iter, data: dict):
@@ -14,14 +15,29 @@ def HandleNextStep(pipelineIterator: iter, data: dict):
 
 
 def TryHandleMessageInPipeline(pipelineIterator: iter, data: dict):
-    channel: pika.adapters.blocking_connection.BlockingChannel = data[PikaConstants.DATA_KEY_CHANNEL]
-    methodFrame: frame.Method = data[PikaConstants.DATA_KEY_INCOMING_MESSAGE][PikaConstants.DATA_KEY_METHOD_FRAME]
     try:
         HandleNextStep(pipelineIterator, data)
-        channel.basic_ack(methodFrame.delivery_tag)
     except Exception as exception:
+        logger = data[PikaConstants.DATA_KEY_LOGGER]
+        logger.exception(str(exception))
         errorHandler: AbstractPikaErrorHandler = data[PikaConstants.DATA_KEY_ERROR_HANDLER]
         errorHandler.HandleFailure(data, exception)
+
+
+def CheckIfMessageIsDeferred(pipelineIterator: iter, data: dict):
+    channel: pika.adapters.blocking_connection.BlockingChannel = data[PikaConstants.DATA_KEY_CHANNEL]
+    pikaProperties: AbstractPikaProperties = data[PikaConstants.DATA_KEY_PROPERTY_BUILDER]
+    methodFrame: frame.Method = data[PikaConstants.DATA_KEY_INCOMING_MESSAGE][PikaConstants.DATA_KEY_METHOD_FRAME]
+    headers: dict = data[PikaConstants.DATA_KEY_INCOMING_MESSAGE][PikaConstants.DATA_KEY_HEADER_FRAME].headers
+    deferredTimeHeaderKey = pikaProperties.deferredTimeHeaderKey
+    if deferredTimeHeaderKey in headers:
+        deferredTime = pikaProperties.StringToDatetime(headers[deferredTimeHeaderKey])
+        now = pikaProperties.StringToDatetime(pikaProperties.DatetimeToString())
+        if deferredTime >= now:
+            PikaOutgoing.ResendMessage(data)
+            channel.basic_ack(methodFrame.delivery_tag)
+            return
+    HandleNextStep(pipelineIterator, data)
 
 
 def SerializeMessage(pipelineIterator: iter, data: dict):
@@ -45,3 +61,9 @@ def HandleMessage(pipelineIterator: iter, data: dict):
     bus.CommitTransaction()
     HandleNextStep(pipelineIterator, data)
 
+
+def AcknowledgeMessage(pipelineIterator: iter, data: dict):
+    channel: pika.adapters.blocking_connection.BlockingChannel = data[PikaConstants.DATA_KEY_CHANNEL]
+    methodFrame: frame.Method = data[PikaConstants.DATA_KEY_INCOMING_MESSAGE][PikaConstants.DATA_KEY_METHOD_FRAME]
+    channel.basic_ack(methodFrame.delivery_tag)
+    HandleNextStep(pipelineIterator, data)

@@ -1,8 +1,13 @@
 import unittest
 import time
-import warnings
+import datetime
+import logging
 from tests import TestTools
 from tests.PikaMessageHandler import PikaMessageHandler
+from PikaBus.abstractions.AbstractPikaBus import AbstractPikaBus
+
+
+logging.basicConfig(format=f'[%(levelname)s] %(name)s - %(message)s', level='INFO')
 
 
 class TestPikaBus(unittest.TestCase):
@@ -10,9 +15,9 @@ class TestPikaBus(unittest.TestCase):
     additionalSentAnswerIds = []
 
     def messageHandlerMethod(self, **kwargs):
-        data = kwargs['data']
-        bus = kwargs['bus']
-        payload = kwargs['payload']
+        data: dict = kwargs['data']
+        bus: AbstractPikaBus = kwargs['bus']
+        payload: dict = kwargs['payload']
         id = payload['id']
         reply = payload['reply']
         self.receivedIds.append(id)
@@ -22,10 +27,13 @@ class TestPikaBus(unittest.TestCase):
 
         if reply:
             topic = payload['topic']
+            replyPayload = TestTools.GetPayload()
             answerPayload = TestTools.GetPayload()
             answerPayloadPublished = TestTools.GetPayload()
+            self.additionalSentAnswerIds.append(replyPayload['id'])
             self.additionalSentAnswerIds.append(answerPayload['id'])
             self.additionalSentAnswerIds.append(answerPayloadPublished['id'])
+            bus.Reply(replyPayload)
             bus.Send(answerPayload)
             bus.Publish(answerPayloadPublished, topic)
 
@@ -38,6 +46,7 @@ class TestPikaBus(unittest.TestCase):
         topic = TestTools.GetRandomTopic()
         sentOutsideTransactionPayload = TestTools.GetPayload()
         sentPayload = TestTools.GetPayload(reply=True, topic=topic)
+        deferrededPayload = TestTools.GetPayload()
         publisedPayload = TestTools.GetPayload()
         failingPayload = TestTools.GetPayload(failing=True)
         pikaBusSetup = TestTools.GetPikaBusSetup(listenerQueue=listenerQueue)
@@ -45,28 +54,32 @@ class TestPikaBus(unittest.TestCase):
         pikaBusSetup.AddMessageHandler(messageHandler)
         pikaBusSetup.AddMessageHandler(self.messageHandlerMethod)
         pikaBusErrorSetup.AddMessageHandler(errorMessageHandler)
-        task = pikaBusSetup.StartAsync()
-        errorTask = pikaBusErrorSetup.StartAsync()
+        tasks = pikaBusSetup.StartAsync(consumers=2)
+        errorTasks = pikaBusErrorSetup.StartAsync()
         try:
             bus = pikaBusSetup.CreateBus()
             bus.Subscribe(topic)
             bus.Send(payload=sentOutsideTransactionPayload)
             bus.StartTransaction()
             bus.Send(payload=sentPayload)
+            bus.Defer(payload=deferrededPayload, delay=datetime.timedelta(seconds=2))
             bus.Publish(payload=publisedPayload, topic=topic)
             bus.CommitTransaction()
             bus.Send(payload=failingPayload)
+            self.assertRaises(Exception, bus.Reply, sentPayload)
         finally:
             time.sleep(5)
             pikaBusSetup.Stop()
             pikaBusErrorSetup.Stop()
-            TestTools.CompleteTask([task, errorTask])
+            TestTools.CompleteTask(tasks + errorTasks)
         sentOutsideTransactionPayloadId = sentOutsideTransactionPayload['id']
         sentPayloadId = sentPayload['id']
+        deferrededPayloadId = deferrededPayload['id']
         publisedPayloadId = publisedPayload['id']
         failingPayloadId = failingPayload['id']
         self.assertTrue(sentOutsideTransactionPayloadId in messageHandler.receivedIds)
         self.assertTrue(sentPayloadId in messageHandler.receivedIds)
+        self.assertTrue(deferrededPayloadId in messageHandler.receivedIds)
         self.assertTrue(publisedPayloadId in messageHandler.receivedIds)
         self.assertTrue(sentOutsideTransactionPayloadId in self.receivedIds)
         self.assertTrue(sentPayloadId in self.receivedIds)

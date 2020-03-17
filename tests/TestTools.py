@@ -5,6 +5,7 @@ import concurrent.futures
 import uuid
 import time
 from PikaBus import PikaBusSetup
+from PikaBus import PikaErrorHandler
 
 
 def GetDefaultConnectionParams():
@@ -33,7 +34,8 @@ def GetRandomTopic():
 def GetPikaBusSetup(listenerQueue: str = None, connParams: pika.ConnectionParameters = None):
     if connParams is None:
         connParams = GetDefaultConnectionParams()
-    return PikaBusSetup.PikaBusSetup(connParams, listenerQueue=listenerQueue)
+    pikaErrorHandler = PikaErrorHandler.PikaErrorHandler(maxRetries=1)
+    return PikaBusSetup.PikaBusSetup(connParams, listenerQueue=listenerQueue, pikaErrorHandler=pikaErrorHandler)
 
 
 def GetPayload(id = None, failing = False, reply = False, topic = ''):
@@ -47,12 +49,8 @@ def GetPayload(id = None, failing = False, reply = False, topic = ''):
     }
 
 
-def CompleteTask(task: concurrent.futures.Future):
+def CompleteTask(tasks: list):
     loop = asyncio.get_event_loop()
-    if isinstance(task, list):
-        tasks = task
-    else:
-        tasks = [task]
     loop.run_until_complete(asyncio.gather(*tasks))
 
 

@@ -51,13 +51,15 @@ class AbstractPikaBusSetup(abc.ABC):
 
     @abc.abstractmethod
     def StartAsync(self,
+                   consumers: int = 1,
                    loop: asyncio.AbstractEventLoop = None,
                    executor: concurrent.futures.ThreadPoolExecutor = None):
         """
-        Start bus consumer as an asynchronous task.
+        Start consumers as asynchronous tasks.
+        :param int consumers: Number of consumers to start.
         :param asyncio.AbstractEventLoop loop: Event loop. Defaults to current event loop if None.
         :param executor: concurrent.futures.ThreadPoolExecutor executor: Executor. Defaults to current executor if None.
-        :rtype: concurrent.futures.Future
+        :rtype: [concurrent.futures.Future]
         """
         pass
 

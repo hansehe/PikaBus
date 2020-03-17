@@ -1,6 +1,7 @@
 import pika
 import pika.exceptions
 import time
+import logging
 
 
 def CreateDurableQueue(channel: pika.adapters.blocking_connection.BlockingChannel, queue: str):
@@ -16,7 +17,7 @@ def BindQueue(channel: pika.adapters.blocking_connection.BlockingChannel, queue:
     channel.queue_bind(queue, exchange, routing_key=topic)
 
 
-def AssertDurableQueueExists(connection: pika.BlockingConnection, queue: str, retries: int = 0):
+def AssertDurableQueueExists(connection: pika.BlockingConnection, queue: str, retries: int = 0, logger=logging.getLogger(__name__)):
     count = 0
     while count <= retries:
         channel: pika.adapters.blocking_connection.BlockingChannel = connection.channel()
@@ -28,7 +29,9 @@ def AssertDurableQueueExists(connection: pika.BlockingConnection, queue: str, re
             count += 1
             if count <= retries:
                 time.sleep(1)
-    raise Exception(f"Queue {queue} does not exist!")
+    msg = f"Queue {queue} does not exist!"
+    logger.exception(msg)
+    raise Exception(msg)
 
 
 def SafeCloseConnection(connection: pika.BlockingConnection, acceptAllFailures: bool = True):

@@ -1,46 +1,75 @@
 import pika
 from pika import frame
+import datetime
+import logging
 from PikaBus.tools import PikaConstants, PikaTools, PikaOutgoing
 from PikaBus.abstractions.AbstractPikaErrorHandler import AbstractPikaErrorHandler
+from PikaBus.abstractions.AbstractPikaProperties import AbstractPikaProperties
 
 
 class PikaErrorHandler(AbstractPikaErrorHandler):
-    def __init__(self, errorQueue = 'error', maxRetries: int = 5, retryHeader: str = 'PikaBus.ERROR_RETRIES'):
+    def __init__(self,
+                 errorQueue = 'error',
+                 maxRetries: int = 5,
+                 delay: int = 1,
+                 backoff: int = 2,
+                 logger=logging.getLogger(__name__)):
+        """
+        :param str errorQueue: Error queue to dump a failing message.
+        :param int maxRetries: Max retries of a failing message before it is sent to the error queue. 0 is infinite.
+        :param int delay: initial delay in seconds between attempts. 0 is no delay.
+        :param int backoff: Multiplier applied to delay between attempts. 0 is no back off.
+        :param logging logger: Logging object
+        """
         self._errorQueue = errorQueue
         self._maxRetries = maxRetries
-        self._retryHeader = retryHeader
+        self._delay = delay
+        self._backoff = backoff
+        self._logger = logger
 
     def HandleFailure(self, data: dict, exception: Exception):
         channel: pika.adapters.blocking_connection.BlockingChannel = data[PikaConstants.DATA_KEY_CHANNEL]
-        exchange: str = data[PikaConstants.DATA_KEY_DIRECT_EXCHANGE]
+        pikaProperties: AbstractPikaProperties = data[PikaConstants.DATA_KEY_PROPERTY_BUILDER]
         listenerQueue: str = data[PikaConstants.DATA_KEY_LISTENING_QUEUE]
         incomingMessage = data[PikaConstants.DATA_KEY_INCOMING_MESSAGE]
         headerFrame: frame.Header = incomingMessage[PikaConstants.DATA_KEY_HEADER_FRAME]
         methodFrame: frame.Method = incomingMessage[PikaConstants.DATA_KEY_METHOD_FRAME]
-        body: bytes = incomingMessage[PikaConstants.DATA_KEY_BODY]
 
-        updatedHeaders = headerFrame.headers
-        retries = self._GetRetries(updatedHeaders) + 1
-        updatedHeaders[self._retryHeader] = retries
+        errorRetriesHeaderKey = pikaProperties.errorRetriesHeaderKey
+        updatedHeaders: dict = headerFrame.headers
+        retries = self._GetRetries(updatedHeaders, errorRetriesHeaderKey) + 1
+        updatedHeaders[errorRetriesHeaderKey] = retries
         destinationQueue = listenerQueue
-        if retries > self._maxRetries:
+
+        messageId = updatedHeaders.get(pikaProperties.messageIdHeaderKey, None)
+        self._logger.info(f'Handling failed message with id {messageId} for the {retries} time.')
+
+        if retries > self._maxRetries > 0:
             destinationQueue = self._errorQueue
             PikaTools.CreateDurableQueue(channel, destinationQueue)
+            self._logger.info(f'Moving failed message with id {messageId} '
+                              f'to error queue {destinationQueue}')
+        elif self._delay > 0:
+            deferredTime = self._GetDelayedBackoffTime(retries, pikaProperties, self._delay, self._backoff)
+            deferredTimeStr = pikaProperties.DatetimeToString(deferredTime)
+            updatedHeaders[pikaProperties.deferredTimeHeaderKey] = deferredTimeStr
+            self._logger.info(f'Deferring failed message with id {messageId} to {deferredTimeStr}')
 
-        outgoingMessage = PikaOutgoing.GetOutgoingMessage(data, destinationQueue,
-                                                          intent=PikaConstants.INTENT_COMMAND,
-                                                          headers=updatedHeaders,
-                                                          exchange=exchange,
-                                                          exception=exception)
-        outgoingMessage[PikaConstants.DATA_KEY_BODY] = body
-        outgoingMessage[PikaConstants.DATA_KEY_CONTENT_TYPE] = None
-
-        PikaOutgoing.SendOrPublishOutgoingMessage(data, outgoingMessage)
+        PikaOutgoing.ResendMessage(data, destinationQueue=destinationQueue, headers=updatedHeaders, exception=exception)
         channel.basic_ack(methodFrame.delivery_tag)
 
-    def _GetRetries(self, headers: dict):
-        if self._retryHeader not in headers:
+    def _GetRetries(self, headers: dict, errorRetriesHeaderKey: str):
+        if errorRetriesHeaderKey not in headers:
             return 0
-        return int(headers[self._retryHeader])
+        return int(headers[errorRetriesHeaderKey])
+
+    def _GetDelayedBackoffTime(self, retry: int, pikaProperties: AbstractPikaProperties, delay: int, backoff: int):
+        if backoff > 0:
+            delay = retry * delay * backoff
+        delayDelta = datetime.timedelta(seconds=delay)
+        now = pikaProperties.StringToDatetime(pikaProperties.DatetimeToString())
+        return now + delayDelta
+
+
 
 
