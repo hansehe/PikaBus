@@ -96,14 +96,17 @@ class PikaBusSetup(AbstractPikaBusSetup):
                               f'and {len(self.channels)} ongoing channels.')
             try:
                 channel.start_consuming()
-            # Don't recover connections closed by server or client
+            # Don't recover connections closed by server, client or underlying bugs.
             except (pika.exceptions.ConnectionClosedByBroker,
-                    pika.exceptions.ConnectionClosedByClient) \
-                    as exception:
+                    pika.exceptions.ConnectionClosedByClient,
+                    AttributeError) as exception:
                 self._logger.warning(f'{str(type(exception))}: {str(exception)}')
             except Exception as exception:
                 self._logger.exception(f'{str(type(exception))}: {str(exception)}')
                 if channelId not in self._forceCloseChannelIds:
+                    self._logger.debug(f'Consumer with channel id {channelId} '
+                                       f'failed due to unknown exception - '
+                                       f'{str(type(exception))}: {str(exception)}')
                     raise
             finally:
                 self._openChannels.pop(channelId)
@@ -120,8 +123,8 @@ class PikaBusSetup(AbstractPikaBusSetup):
                 self.Stop(openChannelId)
         else:
             channel: pika.adapters.blocking_connection.BlockingChannel = openChannels[channelId]
-            self._forceCloseChannelIds[channelId] = channel
             if channel.is_open:
+                self._forceCloseChannelIds[channelId] = channel
                 try:
                     channel.stop_consuming()
                 except Exception as exception:
