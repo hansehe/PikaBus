@@ -22,6 +22,6 @@ pikaBusSetup: AbstractPikaBusSetup = PikaBusSetup(connParams)
 bus: AbstractPikaBus = pikaBusSetup.CreateBus()
 payload = {'hello': 'world!', 'reply': False}
 
-# To publish a message means publishing a message on a topic to any subscribers of the topic.
+# To publish a message means publishing a message on a topic received by any subscribers of the topic.
 bus.Publish(payload=payload, topic='myTopic')
 

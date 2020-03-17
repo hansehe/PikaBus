@@ -68,7 +68,7 @@ bus.Send(payload=payload, queue='myQueue')
 # To defer a message means sending a message explicitly to one receiver with some delay before it is processed.
 bus.Defer(payload=payload, delay=datetime.timedelta(seconds=1), queue='myQueue')
 
-# To publish a message means publishing a message on a topic to any subscribers of the topic.
+# To publish a message means publishing a message on a topic received by any subscribers of the topic.
 bus.Publish(payload=payload, topic='myTopic')
 
 input('Hit enter to stop all consuming channels \n\n')
@@ -86,7 +86,7 @@ loop.run_until_complete(asyncio.gather(*consumingTasks))
 - Start local [RabbitMq](https://www.rabbitmq.com/) instance with [Docker](https://www.docker.com/products/docker-desktop) and [DockerBuildManagement](https://github.com/DIPSAS/DockerBuildManagement):
   - `pip install DockerBuildManagement` 
   - `dbm -swarm -start`
-  - Open RabbitMq admin (user=amqp,password=amqp) at:
+  - Open RabbitMq admin (user=amqp, password=amqp) at:
     - http://localhost:15672/ 
 - Then run the example:
   - `pip install --upgrade PikaBus`

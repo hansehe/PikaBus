@@ -49,7 +49,7 @@ bus.Send(payload=payload, queue='myQueue')
 # To defer a message means sending a message explicitly to one receiver with some delay before it is processed.
 bus.Defer(payload=payload, delay=datetime.timedelta(seconds=1), queue='myQueue')
 
-# To publish a message means publishing a message on a topic to any subscribers of the topic.
+# To publish a message means publishing a message on a topic received by any subscribers of the topic.
 bus.Publish(payload=payload, topic='myTopic')
 
 input('Hit enter to stop all consuming channels \n\n')

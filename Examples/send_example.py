@@ -26,3 +26,6 @@ payload = {'hello': 'world!', 'reply': False}
 # The sending will fail if the destination queue `myQueue` doesn't exist.
 # Create `myQueue` in the RabbitMq admin portal at http://localhost:15672 if it doesn't exist (user=amqp, password=amqp)
 bus.Send(payload=payload, queue='myQueue')
+
+# To defer a message means sending a message explicitly to one receiver with some delay before it is processed.
+bus.Defer(payload=payload, delay=datetime.timedelta(seconds=10), queue='myQueue')
