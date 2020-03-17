@@ -41,7 +41,6 @@ consumingTasks = pikaBusSetup.StartAsync()
 
 # Create a temporary bus to subscribe on topics and send, defer or publish messages.
 bus: AbstractPikaBus = pikaBusSetup.CreateBus()
-bus.Subscribe('myTopic')
 payload = {'hello': 'world!', 'reply': True}
 
 # To send a message means sending a message explicitly to one receiver.
