@@ -5,7 +5,7 @@ import uuid
 import logging
 from concurrent.futures import ThreadPoolExecutor
 import functools
-from retry import retry
+import retry
 from PikaBus.abstractions.AbstractPikaBusSetup import AbstractPikaBusSetup
 from PikaBus.abstractions.AbstractPikaSerializer import AbstractPikaSerializer
 from PikaBus.abstractions.AbstractPikaProperties import AbstractPikaProperties
@@ -25,6 +25,7 @@ class PikaBusSetup(AbstractPikaBusSetup):
                  pikaProperties: AbstractPikaProperties = None,
                  pikaErrorHandler: AbstractPikaErrorHandler = None,
                  pikaBusCreateMethod=None,
+                 retryParams: dict = None,
                  logger=logging.getLogger(__name__)):
         """
         :param pika.ConnectionParameters connParams: Pika connection parameters.
@@ -35,6 +36,7 @@ class PikaBusSetup(AbstractPikaBusSetup):
         :param PikaBus.abstractions.AbstractPikaProperties.AbstractPikaProperties pikaProperties: Optional properties override.
         :param PikaBus.abstractions.AbstractPikaErrorHandler.AbstractPikaErrorHandler pikaErrorHandler: Optional error handler override.
         :param def pikaBusCreateMethod: Optional pikaBus creator method which returns an instance of AbstractPikaBus.
+        :param dict retryParams: A set of retry parameters. See options below in code.
         :param logging logger: Logging object
         """
         if pikaSerializer is None:
@@ -45,6 +47,8 @@ class PikaBusSetup(AbstractPikaBusSetup):
             pikaErrorHandler = PikaErrorHandler.PikaErrorHandler()
         if pikaBusCreateMethod is None:
             pikaBusCreateMethod = self._DefaultPikaBusCreator
+        if retryParams is None:
+            retryParams = {'tries': -1, 'delay': 1, 'max_delay': 10, 'backoff': 1, 'jitter': 1}
 
         self._connParams = connParams
         self._listenerQueue = listenerQueue
@@ -56,8 +60,10 @@ class PikaBusSetup(AbstractPikaBusSetup):
         self._pipeline = self._BuildPikaPipeline()
         self._messageHandlers = []
         self._openChannels = {}
+        self._forceCloseChannelIds = {}
         self._openConnections = {}
         self._pikaBusCreateMethod = pikaBusCreateMethod
+        self._retryParams = retryParams
         self._logger = logger
 
     def __del__(self):
@@ -75,7 +81,6 @@ class PikaBusSetup(AbstractPikaBusSetup):
     def messageHandlers(self):
         return self._messageHandlers
 
-    @retry(pika.exceptions.AMQPConnectionError, delay=2, max_delay=20, jitter=1)
     def Start(self):
         self._AssertListenerQueueIsSet()
         with pika.BlockingConnection(self._connParams) as connection:
@@ -92,18 +97,19 @@ class PikaBusSetup(AbstractPikaBusSetup):
             try:
                 channel.start_consuming()
             # Don't recover connections closed by server or client
-            except pika.exceptions.ConnectionClosedByBroker as exception:
-                self._logger.warning(str(exception))
-            except pika.exceptions.ConnectionClosedByClient as exception:
-                self._logger.warning(str(exception))
-            except pika.exceptions.StreamLostError as exception:
-                self._logger.warning(str(exception))
+            except (pika.exceptions.ConnectionClosedByBroker,
+                    pika.exceptions.ConnectionClosedByClient) \
+                    as exception:
+                self._logger.warning(f'{str(type(exception))}: {str(exception)}')
             except Exception as exception:
-                self._logger.exception(str(exception))
-                raise
+                self._logger.exception(f'{str(type(exception))}: {str(exception)}')
+                if channelId not in self._forceCloseChannelIds:
+                    raise
             finally:
                 self._openChannels.pop(channelId)
                 self._openConnections.pop(channelId)
+                if channelId in self._forceCloseChannelIds:
+                    self._forceCloseChannelIds.pop(channelId)
         self._logger.info(f'Closing consumer channel with id {channelId}.')
 
     def Stop(self, channelId: str = None):
@@ -114,6 +120,7 @@ class PikaBusSetup(AbstractPikaBusSetup):
                 self.Stop(openChannelId)
         else:
             channel: pika.adapters.blocking_connection.BlockingChannel = openChannels[channelId]
+            self._forceCloseChannelIds[channelId] = channel
             if channel.is_open:
                 try:
                     channel.stop_consuming()
@@ -127,14 +134,12 @@ class PikaBusSetup(AbstractPikaBusSetup):
                    loop: asyncio.AbstractEventLoop = None,
                    executor: ThreadPoolExecutor = None):
         self._AssertListenerQueueIsSet()
-        with pika.BlockingConnection(self._connParams) as connection:
-            channel: pika.adapters.blocking_connection.BlockingChannel = connection.channel()
-            PikaTools.CreateDurableQueue(channel, self._listenerQueue)
+        self._AssertConnection(createListenerQueueOnConnected=True)
         if loop is None:
             loop = asyncio.get_event_loop()
         tasks = []
         for i in range(consumers):
-            func = functools.partial(self.Start)
+            func = functools.partial(self._StartConsumerWithRetryHandler)
             task = loop.run_in_executor(executor, func)
             futureTask = asyncio.ensure_future(task, loop=loop)
             tasks.append(futureTask)
@@ -149,6 +154,30 @@ class PikaBusSetup(AbstractPikaBusSetup):
 
     def AddMessageHandler(self, messageHandler: AbstractPikaMessageHandler):
         self._messageHandlers.append(messageHandler)
+
+    def _StartConsumerWithRetryHandler(self):
+        retryException = pika.exceptions.AMQPConnectionError
+        tries = self._retryParams.get('tries', -1)
+        while tries:
+            retry.api.retry_call(self._AssertConnection,
+                                 exceptions=retryException,
+                                 tries=tries,
+                                 delay=self._retryParams.get('delay', 1),
+                                 max_delay=self._retryParams.get('max_delay', 10),
+                                 backoff=self._retryParams.get('backoff', 1),
+                                 jitter=self._retryParams.get('jitter', 1),
+                                 logger=self._logger)
+            try:
+                return self.Start()
+            except retryException as exception:
+                self._logger.exception(f'{str(type(exception))}: {str(exception)}')
+            tries -= 1
+
+    def _AssertConnection(self, createListenerQueueOnConnected = False):
+        with pika.BlockingConnection(self._connParams) as connection:
+            channel: pika.adapters.blocking_connection.BlockingChannel = connection.channel()
+            if createListenerQueueOnConnected:
+                PikaTools.CreateDurableQueue(channel, self._listenerQueue)
 
     def _BuildPikaPipeline(self):
         pipeline = [

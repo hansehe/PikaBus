@@ -16,7 +16,7 @@ class PikaErrorHandler(AbstractPikaErrorHandler):
                  logger=logging.getLogger(__name__)):
         """
         :param str errorQueue: Error queue to dump a failing message.
-        :param int maxRetries: Max retries of a failing message before it is sent to the error queue. 0 is infinite.
+        :param int maxRetries: Max retries of a failing message before it is sent to the error queue. -1 is infinite.
         :param int delay: initial delay in seconds between attempts. 0 is no delay.
         :param int backoff: Multiplier applied to delay between attempts. 0 is no back off.
         :param logging logger: Logging object
@@ -44,7 +44,7 @@ class PikaErrorHandler(AbstractPikaErrorHandler):
         messageId = updatedHeaders.get(pikaProperties.messageIdHeaderKey, None)
         self._logger.info(f'Handling failed message with id {messageId} for the {retries} time.')
 
-        if retries > self._maxRetries > 0:
+        if retries > self._maxRetries >= 0:
             destinationQueue = self._errorQueue
             PikaTools.CreateDurableQueue(channel, destinationQueue)
             self._logger.info(f'Moving failed message with id {messageId} '

@@ -10,7 +10,7 @@ with open(os.path.join(here, 'README.md'), encoding='utf-8') as f:
 with open('requirements.txt') as f:
     reqLines = f.readlines()
 REQUIREMENTS = [reqLine.replace('\r', '').replace('\n', '') for reqLine in reqLines]
-VERSION = '1.0.2'
+VERSION = '1.0.3'
 
 PACKAGE_NAME = 'PikaBus'
 setup(

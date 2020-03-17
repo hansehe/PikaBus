@@ -1,9 +1,5 @@
 networks: 
     backend_network: false
 
-volumes:
-    portainer_data:
-
 stacks:
     rabbitmq: docker-compose.rabbitmq.yml
-    portainer: docker-compose.portainer.yml
