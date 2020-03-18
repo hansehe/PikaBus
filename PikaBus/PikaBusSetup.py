@@ -163,11 +163,10 @@ class PikaBusSetup(AbstractPikaBusSetup):
         self._messageHandlers.append(messageHandler)
 
     def _StartConsumerWithRetryHandler(self, listenerQueue: str):
-        retryException = pika.exceptions.AMQPConnectionError
         tries = self._retryParams.get('tries', -1)
         while tries:
             retry.api.retry_call(self._AssertConnection,
-                                 exceptions=retryException,
+                                 exceptions=Exception,
                                  tries=tries,
                                  delay=self._retryParams.get('delay', 1),
                                  max_delay=self._retryParams.get('max_delay', 10),
@@ -175,8 +174,9 @@ class PikaBusSetup(AbstractPikaBusSetup):
                                  jitter=self._retryParams.get('jitter', 1),
                                  logger=self._logger)
             try:
-                return self.Start(listenerQueue)
-            except retryException as exception:
+                self.Start(listenerQueue)
+                return
+            except Exception as exception:
                 self._logger.exception(f'{str(type(exception))}: {str(exception)}')
             tries -= 1
 
