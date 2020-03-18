@@ -98,10 +98,8 @@ class PikaBusSetup(AbstractPikaBusSetup):
                               f'and {len(self.channels)} ongoing channels.')
             try:
                 channel.start_consuming()
-            # Don't recover connections closed by server, client or underlying bugs.
-            except (pika.exceptions.ConnectionClosedByBroker,
-                    pika.exceptions.ConnectionClosedByClient,
-                    AttributeError) as exception:
+            # Don't recover connections closed by client or underlying bugs.
+            except (pika.exceptions.ConnectionClosedByClient, AttributeError) as exception:
                 self._logger.warning(f'{str(type(exception))}: {str(exception)}')
             except Exception as exception:
                 self._logger.exception(f'{str(type(exception))}: {str(exception)}')
