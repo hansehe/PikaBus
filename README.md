@@ -28,7 +28,7 @@ from PikaBus.PikaBusSetup import PikaBusSetup
 logging.basicConfig(format=f'[%(levelname)s] %(name)s - %(message)s', level='WARNING')
 
 
-def messageHandlerMethod(**kwargs):
+def MessageHandlerMethod(**kwargs):
     """
     A message handler method may simply be a method with som **kwargs.
     The **kwargs will be given all incoming pipeline data, the bus and the incoming payload.
@@ -52,7 +52,7 @@ connParams = pika.ConnectionParameters(
 
 # Create a PikaBusSetup instance with a listener queue, and add the message handler method.
 pikaBusSetup: AbstractPikaBusSetup = PikaBusSetup(connParams, defaultListenerQueue='myQueue')
-pikaBusSetup.AddMessageHandler(messageHandlerMethod)
+pikaBusSetup.AddMessageHandler(MessageHandlerMethod)
 
 # Start consuming messages from the queue.
 consumingTasks = pikaBusSetup.StartAsync()

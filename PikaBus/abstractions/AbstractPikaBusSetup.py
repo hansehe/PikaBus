@@ -78,7 +78,6 @@ class AbstractPikaBusSetup(abc.ABC):
     @abc.abstractmethod
     def AddMessageHandler(self, messageHandler: AbstractPikaMessageHandler):
         """
-        :param PikaBus.abstractions.AbstractPikaMessageHandler.AbstractPikaMessageHandler messageHandler: Message handler.
-        May also be a method with parameters matching AbstractPikaMessageHandler.HandleMessage(..)
+        :param AbstractPikaMessageHandler | def messageHandler: An abstract message handler class or a method with `**kwargs` input.
         """
         pass

@@ -71,7 +71,12 @@ class PikaBus(AbstractPikaBus):
         if exchange is None:
             exchange = self._topicExchange
         PikaTools.CreateExchange(self._channel, exchange, exchangeType='topic')
-        PikaTools.BindQueue(self._channel, queue, exchange, topic)
+        if isinstance(topic, list):
+            topics = topic
+        else:
+            topics = [topic]
+        for topic in topics:
+            PikaTools.BindQueue(self._channel, queue, exchange, topic)
 
     def StartTransaction(self):
         self._data.setdefault(PikaConstants.DATA_KEY_OUTGOING_MESSAGES, [])

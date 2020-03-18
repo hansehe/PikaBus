@@ -32,9 +32,9 @@ class PikaBusSetup(AbstractPikaBusSetup):
         :param str defaultListenerQueue: Pika default listener queue to receive messages. Set to None to act purely as a publisher.
         :param str directExchange: Command exchange to publish direct command messages. The command pattern is used to directly sending a message to one consumer.
         :param str topicExchange: Event exchange to publish event messages. The event pattern is used to publish a message to any listening consumers.
-        :param PikaBus.abstractions.AbstractPikaSerializer.AbstractPikaSerializer pikaSerializer: Optional serializer override.
-        :param PikaBus.abstractions.AbstractPikaProperties.AbstractPikaProperties pikaProperties: Optional properties override.
-        :param PikaBus.abstractions.AbstractPikaErrorHandler.AbstractPikaErrorHandler pikaErrorHandler: Optional error handler override.
+        :param AbstractPikaSerializer pikaSerializer: Optional serializer override.
+        :param AbstractPikaProperties pikaProperties: Optional properties override.
+        :param AbstractPikaErrorHandler pikaErrorHandler: Optional error handler override.
         :param def pikaBusCreateMethod: Optional pikaBus creator method which returns an instance of AbstractPikaBus.
         :param dict retryParams: A set of retry parameters. See options below in code.
         :param logging logger: Logging object

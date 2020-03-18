@@ -59,6 +59,7 @@ class TestPikaBus(unittest.TestCase):
         try:
             bus = pikaBusSetup.CreateBus()
             bus.Subscribe(topic)
+            bus.Subscribe([topic, topic])
             bus.Send(payload=sentOutsideTransactionPayload)
             bus.StartTransaction()
             bus.Send(payload=sentPayload)
