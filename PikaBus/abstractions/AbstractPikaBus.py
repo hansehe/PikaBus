@@ -17,7 +17,7 @@ class AbstractPikaBus(abc.ABC):
     @abc.abstractmethod
     def Publish(self, payload: dict, topic: str, headers: dict = {}, messageType: str = None, exchange: str = None):
         """
-        :param dict payload: Payload to send
+        :param dict payload: Payload to publish
         :param str topic: Topic.
         :param dict headers: Optional headers to add or override
         :param str messageType: Specify message type if necessary.
@@ -38,7 +38,7 @@ class AbstractPikaBus(abc.ABC):
     @abc.abstractmethod
     def Defer(self, payload: dict, delay: datetime.timedelta, queue: str = None, headers: dict = {}, messageType: str = None, exchange: str = None):
         """
-        :param dict payload: Payload to reply
+        :param dict payload: Payload to send
         :param datetime.timedelta delay: Delayed relative time from now to process the message.
         :param str queue: Destination queue. If None, then it it sent back to the listener queue.
         :param dict headers: Optional headers to add or override
