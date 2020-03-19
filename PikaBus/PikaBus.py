@@ -20,9 +20,11 @@ class PikaBus(AbstractPikaBus):
         self._connection: pika.BlockingConnection = data[PikaConstants.DATA_KEY_CONNECTION]
         self._channel: pika.adapters.blocking_connection.BlockingChannel = data[PikaConstants.DATA_KEY_CHANNEL]
         self._pikaProperties: AbstractPikaProperties = data[PikaConstants.DATA_KEY_PROPERTY_BUILDER]
+        self._listenerQueue: str = data[PikaConstants.DATA_KEY_LISTENER_QUEUE]
         self._directExchange: str = data[PikaConstants.DATA_KEY_DIRECT_EXCHANGE]
         self._topicExchange: str = data[PikaConstants.DATA_KEY_TOPIC_EXCHANGE]
-        self._listenerQueue: str = data[PikaConstants.DATA_KEY_LISTENING_QUEUE]
+        self._directExchangeArguments: str = data[PikaConstants.DATA_KEY_DIRECT_EXCHANGE_ARGUMENTS]
+        self._topicExchangeArguments: str = data[PikaConstants.DATA_KEY_TOPIC_EXCHANGE_ARGUMENTS]
         self._transaction: bool = False
         self._closeConnectionOnDelete = closeConnectionOnDelete
         self._logger = logger
@@ -31,22 +33,28 @@ class PikaBus(AbstractPikaBus):
         if self._closeConnectionOnDelete:
             PikaTools.SafeCloseConnection(self._connection)
 
-    def Send(self, payload: dict, queue: str = None, headers: dict = {}, messageType: str = None, exchange: str = None):
+    def Send(self, payload: dict, queue: str = None, headers: dict = {}, messageType: str = None, exchange: str = None, exchangeArguments: dict = None):
         queue = self._SafeGetQueue(queue)
         if exchange is None:
             exchange = self._directExchange
+        if exchangeArguments is None:
+            exchangeArguments = self._directExchangeArguments
         self._SendOrPublish(PikaConstants.INTENT_COMMAND, payload, queue, exchange,
                             headers=headers,
-                            messageType=messageType)
+                            messageType=messageType,
+                            exchangeArguments=exchangeArguments)
 
-    def Publish(self, payload: dict, topic: str, headers: dict = {}, messageType: str = None, exchange: str = None):
+    def Publish(self, payload: dict, topic: str, headers: dict = {}, messageType: str = None, exchange: str = None, exchangeArguments: dict = None):
         if exchange is None:
             exchange = self._topicExchange
+        if exchangeArguments is None:
+            exchangeArguments = self._topicExchangeArguments
         self._SendOrPublish(PikaConstants.INTENT_EVENT, payload, topic, exchange,
                             headers=headers,
-                            messageType=messageType)
+                            messageType=messageType,
+                            exchangeArguments=exchangeArguments)
 
-    def Reply(self, payload: dict, headers: dict = {}, messageType: str = None, exchange: str = None):
+    def Reply(self, payload: dict, headers: dict = {}, messageType: str = None, exchange: str = None, exchangeArguments: dict = None):
         replyToAddressHeaderKey = self._pikaProperties.replyToAddressHeaderKey
         if PikaConstants.DATA_KEY_INCOMING_MESSAGE not in self._data:
             msg = 'Cannot perform a reply outside of a message transaction.'
@@ -58,25 +66,21 @@ class PikaBus(AbstractPikaBus):
             self._logger.exception(msg)
             raise Exception(msg)
         replyToAddress = incomingMessageHeaders[replyToAddressHeaderKey]
-        self.Send(payload, queue=replyToAddress, headers=headers, messageType=messageType, exchange=exchange)
+        self.Send(payload, queue=replyToAddress, headers=headers, messageType=messageType, exchange=exchange, exchangeArguments=exchangeArguments)
 
-    def Defer(self, payload: dict, delay: datetime.timedelta, queue: str = None, headers: dict = {}, messageType: str = None, exchange: str = None):
+    def Defer(self, payload: dict, delay: datetime.timedelta, queue: str = None, headers: dict = {}, messageType: str = None, exchange: str = None, exchangeArguments: dict = None):
         now = self._pikaProperties.StringToDatetime(self._pikaProperties.DatetimeToString())
         deferredTime = now + delay
         headers.setdefault(self._pikaProperties.deferredTimeHeaderKey, self._pikaProperties.DatetimeToString(deferredTime))
-        self.Send(payload, queue=queue, headers=headers, messageType=messageType, exchange=exchange)
+        self.Send(payload, queue=queue, headers=headers, messageType=messageType, exchange=exchange, exchangeArguments=exchangeArguments)
 
-    def Subscribe(self, topic: str, queue: str = None, exchange: str = None):
+    def Subscribe(self, topic: str, queue: str = None, exchange: str = None, exchangeArguments: dict = None):
         queue = self._SafeGetQueue(queue)
         if exchange is None:
             exchange = self._topicExchange
-        PikaTools.CreateExchange(self._channel, exchange, exchangeType='topic')
-        if isinstance(topic, list):
-            topics = topic
-        else:
-            topics = [topic]
-        for topic in topics:
-            PikaTools.BindQueue(self._channel, queue, exchange, topic)
+        if exchangeArguments is None:
+            exchangeArguments = self._topicExchangeArguments
+        PikaTools.BasicSubscribe(self._channel, exchange, topic, queue, exchangeArguments=exchangeArguments)
 
     def StartTransaction(self):
         self._data.setdefault(PikaConstants.DATA_KEY_OUTGOING_MESSAGES, [])
@@ -95,7 +99,7 @@ class PikaBus(AbstractPikaBus):
             queue = self._listenerQueue
         return queue
 
-    def _SendOrPublish(self, intent: str, payload: dict, topicOrQueue: str, exchange: str, headers: dict = {}, messageType: str = None):
+    def _SendOrPublish(self, intent: str, payload: dict, topicOrQueue: str, exchange: str, headers: dict = {}, messageType: str = None, exchangeArguments: dict = None):
         if self._transaction:
             if intent == PikaConstants.INTENT_COMMAND:
                 PikaTools.AssertDurableQueueExists(self._connection, topicOrQueue, logger=self._logger)
@@ -103,12 +107,14 @@ class PikaBus(AbstractPikaBus):
                                                intent=intent,
                                                headers=headers,
                                                messageType=messageType,
-                                               exchange=exchange)
+                                               exchange=exchange,
+                                               exchangeArguments=exchangeArguments)
         else:
             outgoingMessage = PikaOutgoing.GetOutgoingMessage(self._data, topicOrQueue,
                                                               payload=payload,
                                                               intent=intent,
                                                               headers=headers,
                                                               messageType=messageType,
-                                                              exchange=exchange)
+                                                              exchange=exchange,
+                                                              exchangeArguments=exchangeArguments)
             PikaOutgoing.SendOrPublishOutgoingMessage(self._data, outgoingMessage)

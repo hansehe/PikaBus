@@ -21,9 +21,9 @@ def GetDefaultConnectionParams():
     return connParams
 
 
-def GetRandomQueue():
+def GetRandomQueue(prefix = 'test'):
     id = str(uuid.uuid1())
-    return f'pika-test-{id}'
+    return f'pika-{prefix}-{id}'
 
 
 def GetRandomTopic():
@@ -31,11 +31,11 @@ def GetRandomTopic():
     return f'pika-topic-{id}'
 
 
-def GetPikaBusSetup(listenerQueue: str = None, connParams: pika.ConnectionParameters = None):
+def GetPikaBusSetup(listenerQueue: str = None, connParams: pika.ConnectionParameters = None, errorQueue: str = 'error', topics: list = []):
     if connParams is None:
         connParams = GetDefaultConnectionParams()
-    pikaErrorHandler = PikaErrorHandler.PikaErrorHandler(maxRetries=1)
-    return PikaBusSetup.PikaBusSetup(connParams, defaultListenerQueue=listenerQueue, pikaErrorHandler=pikaErrorHandler)
+    pikaErrorHandler = PikaErrorHandler.PikaErrorHandler(errorQueue=errorQueue, maxRetries=1)
+    return PikaBusSetup.PikaBusSetup(connParams, defaultListenerQueue=listenerQueue, defaultSubscriptions=topics, pikaErrorHandler=pikaErrorHandler)
 
 
 def GetPayload(id = None, failing = False, reply = False, topic = ''):

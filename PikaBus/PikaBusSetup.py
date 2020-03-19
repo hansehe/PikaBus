@@ -19,8 +19,12 @@ from PikaBus.tools import PikaSteps, PikaConstants, PikaTools
 class PikaBusSetup(AbstractPikaBusSetup):
     def __init__(self, connParams: pika.ConnectionParameters,
                  defaultListenerQueue: str = None,
-                 directExchange: str = 'PikaBusDirect',
-                 topicExchange: str = 'PikaBusTopic',
+                 defaultSubscriptions = [],
+                 defaultDirectExchange: str = 'PikaBusDirect',
+                 defaultTopicExchange: str = 'PikaBusTopic',
+                 defaultListenerQueueArguments: dict = None,
+                 defaultDirectExchangeArguments: dict = None,
+                 defaultTopicExchangeArguments: dict = None,
                  pikaSerializer: AbstractPikaSerializer = None,
                  pikaProperties: AbstractPikaProperties = None,
                  pikaErrorHandler: AbstractPikaErrorHandler = None,
@@ -30,8 +34,12 @@ class PikaBusSetup(AbstractPikaBusSetup):
         """
         :param pika.ConnectionParameters connParams: Pika connection parameters.
         :param str defaultListenerQueue: Pika default listener queue to receive messages. Set to None to act purely as a publisher.
-        :param str directExchange: Command exchange to publish direct command messages. The command pattern is used to directly sending a message to one consumer.
-        :param str topicExchange: Event exchange to publish event messages. The event pattern is used to publish a message to any listening consumers.
+        :param [str] | str defaultSubscriptions: Default topic or a list of topics to subscribe.
+        :param str defaultDirectExchange: Default command exchange to publish direct command messages. The command pattern is used to directly sending a message to one consumer.
+        :param str defaultTopicExchange: Default event exchange to publish event messages. The event pattern is used to publish a message to any listening consumers.
+        :param dict defaultListenerQueueArguments: Default listener queue arguments.
+        :param dict defaultDirectExchangeArguments: Default direct exchange arguments.
+        :param dict defaultTopicExchangeArguments: Default topic exchange arguments.
         :param AbstractPikaSerializer pikaSerializer: Optional serializer override.
         :param AbstractPikaProperties pikaProperties: Optional properties override.
         :param AbstractPikaErrorHandler pikaErrorHandler: Optional error handler override.
@@ -39,6 +47,9 @@ class PikaBusSetup(AbstractPikaBusSetup):
         :param dict retryParams: A set of retry parameters. See options below in code.
         :param logging logger: Logging object
         """
+        if isinstance(defaultSubscriptions, str):
+            defaultSubscriptions = [defaultSubscriptions]
+
         if pikaSerializer is None:
             pikaSerializer = PikaSerializer.PikaSerializer()
         if pikaProperties is None:
@@ -52,8 +63,12 @@ class PikaBusSetup(AbstractPikaBusSetup):
 
         self._connParams = connParams
         self._defaultListenerQueue = defaultListenerQueue
-        self._directExchange = directExchange
-        self._topicExchange = topicExchange
+        self._defaultSubscriptions = defaultSubscriptions
+        self._defaultDirectExchange = defaultDirectExchange
+        self._defaultTopicExchange = defaultTopicExchange
+        self._defaultListenerQueueArguments = defaultListenerQueueArguments
+        self._defaultDirectExchangeArguments = defaultDirectExchangeArguments
+        self._defaultTopicExchangeArguments = defaultTopicExchangeArguments
         self._pikaSerializer = pikaSerializer
         self._pikaProperties = pikaProperties
         self._pikaErrorHandler = pikaErrorHandler
@@ -81,8 +96,8 @@ class PikaBusSetup(AbstractPikaBusSetup):
     def messageHandlers(self):
         return self._messageHandlers
 
-    def Start(self, listenerQueue: str = None):
-        listenerQueue = self._AssertListenerQueueIsSet(listenerQueue)
+    def Start(self, listenerQueue: str = None, listenerQueueArguments: dict = None):
+        listenerQueue, listenerQueueArguments = self._AssertListenerQueueIsSet(listenerQueue, listenerQueueArguments)
         with pika.BlockingConnection(self._connParams) as connection:
             channelId = str(uuid.uuid1())
             onMessageCallback = functools.partial(self._OnMessageCallBack,
@@ -90,7 +105,9 @@ class PikaBusSetup(AbstractPikaBusSetup):
                                                   channelId=channelId,
                                                   listenerQueue=listenerQueue)
             channel: pika.adapters.blocking_connection.BlockingChannel = connection.channel()
-            PikaTools.CreateDurableQueue(channel, listenerQueue)
+            PikaTools.CreateDurableQueue(channel, listenerQueue, arguments=listenerQueueArguments)
+            PikaTools.BasicSubscribe(channel, self._defaultTopicExchange, self._defaultSubscriptions, listenerQueue,
+                                     exchangeArguments=self._defaultTopicExchangeArguments)
             channel.basic_consume(listenerQueue, onMessageCallback)
             self._openChannels[channelId] = channel
             self._openConnections[channelId] = connection
@@ -100,7 +117,7 @@ class PikaBusSetup(AbstractPikaBusSetup):
                 channel.start_consuming()
             # Don't recover connections closed by client or underlying bugs.
             except (pika.exceptions.ConnectionClosedByClient, AttributeError) as exception:
-                self._logger.warning(f'{str(type(exception))}: {str(exception)}')
+                self._logger.exception(f'Ignoring - {str(type(exception))}: {str(exception)}')
             except Exception as exception:
                 self._logger.exception(f'{str(type(exception))}: {str(exception)}')
                 if channelId not in self._forceCloseChannelIds:
@@ -128,17 +145,19 @@ class PikaBusSetup(AbstractPikaBusSetup):
                 try:
                     channel.stop_consuming()
                 except Exception as exception:
-                    self._logger.warning(str(exception))
+                    self._logger.exception(f'Ignoring - {str(exception)}')
                     connection: pika.BlockingConnection = openConnections[channelId]
                     PikaTools.SafeCloseConnection(connection)
 
     def StartAsync(self,
                    consumers: int = 1,
                    listenerQueue: str = None,
+                   listenerQueueArguments: dict = None,
                    loop: asyncio.AbstractEventLoop = None,
                    executor: ThreadPoolExecutor = None):
-        listenerQueue = self._AssertListenerQueueIsSet(listenerQueue)
+        listenerQueue, listenerQueueArguments = self._AssertListenerQueueIsSet(listenerQueue, listenerQueueArguments)
         self._AssertConnection(listenerQueue=listenerQueue,
+                               listenerQueueArguments=listenerQueueArguments,
                                createListenerQueueOnConnected=True)
         if loop is None:
             loop = asyncio.get_event_loop()
@@ -154,7 +173,7 @@ class PikaBusSetup(AbstractPikaBusSetup):
     def CreateBus(self, listenerQueue: str = None):
         connection = pika.BlockingConnection(self._connParams)
         channel = connection.channel()
-        listenerQueue = self._GetListenerQueue(listenerQueue)
+        listenerQueue, _ = self._GetListenerQueue(listenerQueue)
         data = self._CreateDefaultDataHolder(connection, channel, listenerQueue)
         pikaBus: AbstractPikaBus = self._pikaBusCreateMethod(data=data, closeConnectionOnDelete=True)
         return pikaBus
@@ -180,11 +199,13 @@ class PikaBusSetup(AbstractPikaBusSetup):
                 self._logger.exception(f'{str(type(exception))}: {str(exception)}')
             tries -= 1
 
-    def _AssertConnection(self, listenerQueue: str = None, createListenerQueueOnConnected = False):
+    def _AssertConnection(self, listenerQueue: str = None,
+                          listenerQueueArguments: dict = None,
+                          createListenerQueueOnConnected = False):
         with pika.BlockingConnection(self._connParams) as connection:
             channel: pika.adapters.blocking_connection.BlockingChannel = connection.channel()
             if createListenerQueueOnConnected:
-                PikaTools.CreateDurableQueue(channel, listenerQueue)
+                PikaTools.CreateDurableQueue(channel, listenerQueue, arguments=listenerQueueArguments)
 
     def _BuildPikaPipeline(self):
         pipeline = [
@@ -226,9 +247,11 @@ class PikaBusSetup(AbstractPikaBusSetup):
                                  channel: pika.adapters.blocking_connection.BlockingChannel,
                                  listenerQueue: str):
         data = {
-            PikaConstants.DATA_KEY_LISTENING_QUEUE: listenerQueue,
-            PikaConstants.DATA_KEY_DIRECT_EXCHANGE: self._directExchange,
-            PikaConstants.DATA_KEY_TOPIC_EXCHANGE: self._topicExchange,
+            PikaConstants.DATA_KEY_LISTENER_QUEUE: listenerQueue,
+            PikaConstants.DATA_KEY_DIRECT_EXCHANGE: self._defaultDirectExchange,
+            PikaConstants.DATA_KEY_TOPIC_EXCHANGE: self._defaultTopicExchange,
+            PikaConstants.DATA_KEY_DIRECT_EXCHANGE_ARGUMENTS: self._defaultDirectExchangeArguments,
+            PikaConstants.DATA_KEY_TOPIC_EXCHANGE_ARGUMENTS: self._defaultTopicExchangeArguments,
             PikaConstants.DATA_KEY_CONNECTION: connection,
             PikaConstants.DATA_KEY_CHANNEL: channel,
             PikaConstants.DATA_KEY_SERIALIZER: self._pikaSerializer,
@@ -239,18 +262,20 @@ class PikaBusSetup(AbstractPikaBusSetup):
         }
         return data
 
-    def _GetListenerQueue(self, listenerQueue: str = None):
+    def _GetListenerQueue(self, listenerQueue: str = None, listenerQueueArguments: dict = None):
         if listenerQueue is None:
             listenerQueue = self._defaultListenerQueue
-        return listenerQueue
+        if listenerQueueArguments is None:
+            listenerQueueArguments = self._defaultListenerQueueArguments
+        return listenerQueue, listenerQueueArguments
 
-    def _AssertListenerQueueIsSet(self, listenerQueue: str):
-        listenerQueue = self._GetListenerQueue(listenerQueue)
+    def _AssertListenerQueueIsSet(self, listenerQueue: str, listenerQueueArguments: dict = None):
+        listenerQueue, listenerQueueArguments = self._GetListenerQueue(listenerQueue, listenerQueueArguments)
         if listenerQueue is None:
             msg = "Listening queue is not set, so you cannot start the listener process."
             self._logger.exception(msg)
             raise Exception(msg)
-        return listenerQueue
+        return listenerQueue, listenerQueueArguments
 
     def _DefaultPikaBusCreator(self, data: dict, closeConnectionOnDelete: bool = False):
         return PikaBus.PikaBus(data=data, closeConnectionOnDelete=closeConnectionOnDelete)
