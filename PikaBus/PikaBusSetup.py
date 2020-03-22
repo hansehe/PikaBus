@@ -103,11 +103,10 @@ class PikaBusSetup(AbstractPikaBusSetup):
             onMessageCallback = functools.partial(self._OnMessageCallBack,
                                                   connection=connection,
                                                   channelId=channelId,
-                                                  listenerQueue=listenerQueue)
+                                                  listenerQueue=listenerQueue,
+                                                  listenerQueueArguments=listenerQueueArguments)
             channel: pika.adapters.blocking_connection.BlockingChannel = connection.channel()
-            PikaTools.CreateDurableQueue(channel, listenerQueue, arguments=listenerQueueArguments)
-            PikaTools.BasicSubscribe(channel, self._defaultTopicExchange, self._defaultSubscriptions, listenerQueue,
-                                     exchangeArguments=self._defaultTopicExchangeArguments)
+            self._CreateDefaultRabbitMqSetup(channel, listenerQueue, listenerQueueArguments)
             channel.basic_consume(listenerQueue, onMessageCallback)
             self._openChannels[channelId] = channel
             self._openConnections[channelId] = connection
@@ -158,7 +157,7 @@ class PikaBusSetup(AbstractPikaBusSetup):
         listenerQueue, listenerQueueArguments = self._AssertListenerQueueIsSet(listenerQueue, listenerQueueArguments)
         self._AssertConnection(listenerQueue=listenerQueue,
                                listenerQueueArguments=listenerQueueArguments,
-                               createListenerQueueOnConnected=True)
+                               createDefaultRabbitMqSetup=True)
         if loop is None:
             loop = asyncio.get_event_loop()
         tasks = []
@@ -173,8 +172,8 @@ class PikaBusSetup(AbstractPikaBusSetup):
     def CreateBus(self, listenerQueue: str = None):
         connection = pika.BlockingConnection(self._connParams)
         channel = connection.channel()
-        listenerQueue, _ = self._GetListenerQueue(listenerQueue)
-        data = self._CreateDefaultDataHolder(connection, channel, listenerQueue)
+        listenerQueue, listenerQueueArguments = self._GetListenerQueue(listenerQueue)
+        data = self._CreateDefaultDataHolder(connection, channel, listenerQueue, listenerQueueArguments)
         pikaBus: AbstractPikaBus = self._pikaBusCreateMethod(data=data, closeConnectionOnDelete=True)
         return pikaBus
 
@@ -199,13 +198,37 @@ class PikaBusSetup(AbstractPikaBusSetup):
                 self._logger.exception(f'{str(type(exception))}: {str(exception)}')
             tries -= 1
 
-    def _AssertConnection(self, listenerQueue: str = None,
+    def _AssertConnection(self,
+                          listenerQueue: str = None,
                           listenerQueueArguments: dict = None,
-                          createListenerQueueOnConnected = False):
+                          createDefaultRabbitMqSetup = False):
         with pika.BlockingConnection(self._connParams) as connection:
             channel: pika.adapters.blocking_connection.BlockingChannel = connection.channel()
-            if createListenerQueueOnConnected:
-                PikaTools.CreateDurableQueue(channel, listenerQueue, arguments=listenerQueueArguments)
+            if createDefaultRabbitMqSetup:
+                self._CreateDefaultRabbitMqSetup(channel, listenerQueue, listenerQueueArguments)
+
+    def _CreateDefaultRabbitMqSetup(self,
+                                    channel: pika.adapters.blocking_connection.BlockingChannel,
+                                    listenerQueue: str,
+                                    listenerQueueArguments: dict,
+                                    topicExchange: str = None,
+                                    topicExchangeArguments: dict = None,
+                                    directExchange: str = None,
+                                    directExchangeArguments: dict = None,
+                                    subscriptions: list = None):
+        if topicExchange is None:
+            topicExchange = self._defaultTopicExchange
+        if topicExchangeArguments is None:
+            topicExchangeArguments = self._defaultTopicExchangeArguments
+        if directExchange is None:
+            directExchange = self._defaultDirectExchange
+        if directExchangeArguments is None:
+            directExchangeArguments = self._defaultDirectExchangeArguments
+        if subscriptions is None:
+            subscriptions = self._defaultSubscriptions
+        PikaTools.CreateDurableQueue(channel, listenerQueue, arguments=listenerQueueArguments)
+        PikaTools.CreateExchange(channel, directExchange, arguments=directExchangeArguments)
+        PikaTools.BasicSubscribe(channel, topicExchange, subscriptions, listenerQueue, exchangeArguments=topicExchangeArguments)
 
     def _BuildPikaPipeline(self):
         pipeline = [
@@ -224,9 +247,10 @@ class PikaBusSetup(AbstractPikaBusSetup):
                            body: bytes,
                            connection: pika.BlockingConnection,
                            channelId: str,
-                           listenerQueue: str):
+                           listenerQueue: str,
+                           listenerQueueArguments: dict):
         self._logger.debug(f"Received new message on channel {channelId}")
-        data = self._CreateDefaultDataHolder(connection, channel, listenerQueue)
+        data = self._CreateDefaultDataHolder(connection, channel, listenerQueue, listenerQueueArguments)
         data[PikaConstants.DATA_KEY_MESSAGE_HANDLERS] = list(self.messageHandlers)
         incomingMessage = {
             PikaConstants.DATA_KEY_METHOD_FRAME: methodFrame,
@@ -245,9 +269,11 @@ class PikaBusSetup(AbstractPikaBusSetup):
     def _CreateDefaultDataHolder(self,
                                  connection: pika.BlockingConnection,
                                  channel: pika.adapters.blocking_connection.BlockingChannel,
-                                 listenerQueue: str):
+                                 listenerQueue: str,
+                                 listenerQueueArguments: dict):
         data = {
             PikaConstants.DATA_KEY_LISTENER_QUEUE: listenerQueue,
+            PikaConstants.DATA_KEY_LISTENER_QUEUE_ARGUMENTS: listenerQueueArguments,
             PikaConstants.DATA_KEY_DIRECT_EXCHANGE: self._defaultDirectExchange,
             PikaConstants.DATA_KEY_TOPIC_EXCHANGE: self._defaultTopicExchange,
             PikaConstants.DATA_KEY_DIRECT_EXCHANGE_ARGUMENTS: self._defaultDirectExchangeArguments,

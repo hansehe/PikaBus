@@ -63,7 +63,7 @@ def BasicPublish(channel: pika.adapters.blocking_connection.BlockingChannel,
                  exchange: str, topic: str, body: bytes,
                  properties: pika.spec.BasicProperties = None,
                  exchangeType: str = 'topic',
-                 exchangeArguments: str = None):
+                 exchangeArguments: dict = None):
     CreateExchange(channel, exchange, exchangeType=exchangeType, arguments=exchangeArguments)
     channel.basic_publish(exchange, topic, body, properties=properties)
 
@@ -71,7 +71,7 @@ def BasicPublish(channel: pika.adapters.blocking_connection.BlockingChannel,
 def BasicSubscribe(channel: pika.adapters.blocking_connection.BlockingChannel,
                    exchange: str, topic: str, queue: str,
                    exchangeType: str = 'topic',
-                   exchangeArguments: str = None):
+                   exchangeArguments: dict = None):
     CreateExchange(channel, exchange, exchangeType=exchangeType, arguments=exchangeArguments)
     if isinstance(topic, list):
         topics = topic

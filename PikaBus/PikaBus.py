@@ -21,6 +21,7 @@ class PikaBus(AbstractPikaBus):
         self._channel: pika.adapters.blocking_connection.BlockingChannel = data[PikaConstants.DATA_KEY_CHANNEL]
         self._pikaProperties: AbstractPikaProperties = data[PikaConstants.DATA_KEY_PROPERTY_BUILDER]
         self._listenerQueue: str = data[PikaConstants.DATA_KEY_LISTENER_QUEUE]
+        self._listenerQueueArguments: str = data[PikaConstants.DATA_KEY_LISTENER_QUEUE_ARGUMENTS]
         self._directExchange: str = data[PikaConstants.DATA_KEY_DIRECT_EXCHANGE]
         self._topicExchange: str = data[PikaConstants.DATA_KEY_TOPIC_EXCHANGE]
         self._directExchangeArguments: str = data[PikaConstants.DATA_KEY_DIRECT_EXCHANGE_ARGUMENTS]
