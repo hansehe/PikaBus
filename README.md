@@ -115,4 +115,6 @@ loop.run_until_complete(asyncio.gather(*consumingTasks))
 
 ### Run Unit Tests
 - pip install DockerBuildManagement 
+- dbm -swarm -start
 - dbm -test
+- dbm -swarm -stop
