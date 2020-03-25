@@ -10,7 +10,7 @@ with open(os.path.join(here, 'README.md'), encoding='utf-8') as f:
 with open('requirements.txt') as f:
     reqLines = f.readlines()
 REQUIREMENTS = [reqLine.replace('\r', '').replace('\n', '') for reqLine in reqLines]
-VERSION = '1.0.12'
+VERSION = '1.0.13'
 
 PACKAGE_NAME = 'PikaBus'
 setup(
@@ -24,14 +24,13 @@ setup(
     author_email='hans.erik.heggem@gmail.com',  # Optional
     include_package_data=True,
     classifiers=[  # Optional
-        # How mature is this project? Common values are
-        #   3 - Alpha
-        #   4 - Beta
-        #   5 - Production/Stable
         'Development Status :: 5 - Production/Stable',
 
         'Intended Audience :: Developers',
-        'Topic :: Software Development :: Build Tools',
+        'Topic :: Communications', 'Topic :: Internet',
+        'Topic :: Software Development :: Libraries',
+        'Topic :: Software Development :: Libraries :: Python Modules',
+        'Topic :: System :: Networking',
 
         'License :: OSI Approved :: MIT License',
 
@@ -39,6 +38,8 @@ setup(
         'Programming Language :: Python :: 3.4',
         'Programming Language :: Python :: 3.5',
         'Programming Language :: Python :: 3.6',
+        'Programming Language :: Python :: 3.7',
+        'Programming Language :: Python :: 3.8',
     ],
 
     keywords='pika bus',  # Optional
