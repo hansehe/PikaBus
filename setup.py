@@ -10,19 +10,19 @@ with open(os.path.join(here, 'README.md'), encoding='utf-8') as f:
 with open('requirements.txt') as f:
     reqLines = f.readlines()
 REQUIREMENTS = [reqLine.replace('\r', '').replace('\n', '') for reqLine in reqLines]
-VERSION = '1.0.13'
+VERSION = '1.0.14'
 
 PACKAGE_NAME = 'PikaBus'
 setup(
     name=PACKAGE_NAME,  # Required
     version=VERSION,  # Required
-    description='Pika bus wrapper with amqp',  # Required
+    description='Pika bus wrapper for amqp messaging with RabbitMq',  # Required
     long_description=long_description,  # Optional
     long_description_content_type='text/markdown',  # Optional
-    url='https://github.com/hansehe/PikaBus',  # Optional
     author='Hans Erik Heggem',  # Optional
     author_email='hans.erik.heggem@gmail.com',  # Optional
     include_package_data=True,
+    platforms='all',
     classifiers=[  # Optional
         'Development Status :: 5 - Production/Stable',
 
@@ -34,6 +34,10 @@ setup(
 
         'License :: OSI Approved :: MIT License',
 
+        'Operating System :: MacOS',
+        'Operating System :: POSIX',
+        'Operating System :: Microsoft',
+
         'Programming Language :: Python :: 3',
         'Programming Language :: Python :: 3.4',
         'Programming Language :: Python :: 3.5',
@@ -42,12 +46,16 @@ setup(
         'Programming Language :: Python :: 3.8',
     ],
 
-    keywords='pika bus',  # Optional
+    keywords='pika RabbitMQ amqp',  # Optional
     packages=find_packages(exclude=['contrib', 'docs', '*tests']),  # Required
     install_requires=REQUIREMENTS,  # Optional
 
     extras_require={  # Optional
         'dev': ['check-manifest'],
         'test': ['coverage'],
+    },
+    project_urls={
+        # 'Documentation': 'https://pikabus.readthedocs.org/',
+        'Source': 'https://github.com/hansehe/PikaBus',
     },
 )
