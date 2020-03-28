@@ -13,7 +13,8 @@ class AbstractPikaProperties(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def DatetimeToString(self, time: datetime.datetime = None):
+    def DatetimeToString(self,
+                         time: datetime.datetime = None):
         """
         :param datetime.datetime time: Optional time to convert to string. Will return utcnow() if it is None.
         :rtype: str

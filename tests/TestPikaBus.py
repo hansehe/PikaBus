@@ -89,6 +89,8 @@ class TestPikaBus(unittest.TestCase):
             self.assertTrue(additionalSentAnswerId in self.receivedIds)
 
         self.assertTrue(failingPayloadId in errorMessageHandler.receivedIds)
+        bus.Unsubscribe(topic)
+        bus.Unsubscribe([topic, topic])
 
 
 if __name__ == '__main__':

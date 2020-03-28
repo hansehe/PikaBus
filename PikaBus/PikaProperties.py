@@ -32,7 +32,8 @@ class PikaProperties(AbstractPikaProperties):
         properties = pika.spec.BasicProperties(headers=headers)
         return properties
 
-    def DatetimeToString(self, time: datetime.datetime = None):
+    def DatetimeToString(self,
+                         time: datetime.datetime = None):
         if time is None:
             time = datetime.datetime.utcnow()
         return time.strftime(self._timeFormat)

@@ -34,7 +34,12 @@ class PikaBus(AbstractPikaBus):
         if self._closeConnectionOnDelete:
             PikaTools.SafeCloseConnection(self._connection)
 
-    def Send(self, payload: dict, queue: str = None, headers: dict = {}, messageType: str = None, exchange: str = None, exchangeArguments: dict = None):
+    def Send(self, payload: dict,
+             queue: str = None,
+             headers: dict = {},
+             messageType: str = None,
+             exchange: str = None,
+             exchangeArguments: dict = None):
         queue = self._SafeGetQueue(queue)
         if exchange is None:
             exchange = self._directExchange
@@ -45,7 +50,11 @@ class PikaBus(AbstractPikaBus):
                             messageType=messageType,
                             exchangeArguments=exchangeArguments)
 
-    def Publish(self, payload: dict, topic: str, headers: dict = {}, messageType: str = None, exchange: str = None, exchangeArguments: dict = None):
+    def Publish(self, payload: dict, topic: str,
+                headers: dict = {},
+                messageType: str = None,
+                exchange: str = None,
+                exchangeArguments: dict = None):
         if exchange is None:
             exchange = self._topicExchange
         if exchangeArguments is None:
@@ -55,7 +64,11 @@ class PikaBus(AbstractPikaBus):
                             messageType=messageType,
                             exchangeArguments=exchangeArguments)
 
-    def Reply(self, payload: dict, headers: dict = {}, messageType: str = None, exchange: str = None, exchangeArguments: dict = None):
+    def Reply(self, payload: dict,
+              headers: dict = {},
+              messageType: str = None,
+              exchange: str = None,
+              exchangeArguments: dict = None):
         replyToAddressHeaderKey = self._pikaProperties.replyToAddressHeaderKey
         if PikaConstants.DATA_KEY_INCOMING_MESSAGE not in self._data:
             msg = 'Cannot perform a reply outside of a message transaction.'
@@ -69,19 +82,35 @@ class PikaBus(AbstractPikaBus):
         replyToAddress = incomingMessageHeaders[replyToAddressHeaderKey]
         self.Send(payload, queue=replyToAddress, headers=headers, messageType=messageType, exchange=exchange, exchangeArguments=exchangeArguments)
 
-    def Defer(self, payload: dict, delay: datetime.timedelta, queue: str = None, headers: dict = {}, messageType: str = None, exchange: str = None, exchangeArguments: dict = None):
+    def Defer(self, payload: dict, delay: datetime.timedelta,
+              queue: str = None,
+              headers: dict = {},
+              messageType: str = None,
+              exchange: str = None,
+              exchangeArguments: dict = None):
         now = self._pikaProperties.StringToDatetime(self._pikaProperties.DatetimeToString())
         deferredTime = now + delay
         headers.setdefault(self._pikaProperties.deferredTimeHeaderKey, self._pikaProperties.DatetimeToString(deferredTime))
         self.Send(payload, queue=queue, headers=headers, messageType=messageType, exchange=exchange, exchangeArguments=exchangeArguments)
 
-    def Subscribe(self, topic: str, queue: str = None, exchange: str = None, exchangeArguments: dict = None):
+    def Subscribe(self, topic: str,
+                  queue: str = None,
+                  exchange: str = None,
+                  exchangeArguments: dict = None):
         queue = self._SafeGetQueue(queue)
         if exchange is None:
             exchange = self._topicExchange
         if exchangeArguments is None:
             exchangeArguments = self._topicExchangeArguments
         PikaTools.BasicSubscribe(self._channel, exchange, topic, queue, exchangeArguments=exchangeArguments)
+
+    def Unsubscribe(self, topic: str,
+                    queue: str = None,
+                    exchange: str = None):
+        queue = self._SafeGetQueue(queue)
+        if exchange is None:
+            exchange = self._topicExchange
+        PikaTools.BasicUnsubscribe(self._channel, exchange, topic, queue)
 
     def StartTransaction(self):
         self._data.setdefault(PikaConstants.DATA_KEY_OUTGOING_MESSAGES, [])
@@ -100,7 +129,10 @@ class PikaBus(AbstractPikaBus):
             queue = self._listenerQueue
         return queue
 
-    def _SendOrPublish(self, intent: str, payload: dict, topicOrQueue: str, exchange: str, headers: dict = {}, messageType: str = None, exchangeArguments: dict = None):
+    def _SendOrPublish(self, intent: str, payload: dict, topicOrQueue: str, exchange: str,
+                       headers: dict = {},
+                       messageType: str = None,
+                       exchangeArguments: dict = None):
         if self._transaction:
             if intent == PikaConstants.INTENT_COMMAND:
                 PikaTools.AssertDurableQueueExists(self._connection, topicOrQueue, logger=self._logger)

@@ -19,6 +19,11 @@ def BindQueue(channel: pika.adapters.blocking_connection.BlockingChannel, queue:
     channel.queue_bind(queue, exchange, routing_key=topic, arguments=arguments)
 
 
+def UnbindQueue(channel: pika.adapters.blocking_connection.BlockingChannel, queue: str, exchange: str, topic: str,
+                arguments: dict = None):
+    channel.queue_unbind(queue, exchange, routing_key=topic, arguments=arguments)
+
+
 def AssertDurableQueueExists(connection: pika.BlockingConnection, queue: str, retries: int = 0, logger=logging.getLogger(__name__)):
     count = 0
     while count <= retries:
@@ -79,3 +84,13 @@ def BasicSubscribe(channel: pika.adapters.blocking_connection.BlockingChannel,
         topics = [topic]
     for topic in topics:
         BindQueue(channel, queue, exchange, topic)
+
+
+def BasicUnsubscribe(channel: pika.adapters.blocking_connection.BlockingChannel,
+                     exchange: str, topic: str, queue: str):
+    if isinstance(topic, list):
+        topics = topic
+    else:
+        topics = [topic]
+    for topic in topics:
+        UnbindQueue(channel, queue, exchange, topic)

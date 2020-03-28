@@ -83,6 +83,17 @@ class AbstractPikaBus(abc.ABC):
         pass
 
     @abc.abstractmethod
+    def Unsubscribe(self, topic: str,
+                    queue: str = None,
+                    exchange: str = None):
+        """
+        :param str | [str] topic: A topic or a list of topics to unsubscribe.
+        :param str queue: Queue to unbind the topic(s). If None, then default listener queue is used.
+        :param exchange: Optional exchange to override with.
+        """
+        pass
+
+    @abc.abstractmethod
     def StartTransaction(self):
         """
         Start a bus transaction. All outgoing messages will be stored until CommitTransaction() is triggered.

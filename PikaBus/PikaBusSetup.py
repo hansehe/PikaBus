@@ -96,7 +96,9 @@ class PikaBusSetup(AbstractPikaBusSetup):
     def messageHandlers(self):
         return self._messageHandlers
 
-    def Start(self, listenerQueue: str = None, listenerQueueArguments: dict = None):
+    def Start(self,
+              listenerQueue: str = None,
+              listenerQueueArguments: dict = None):
         listenerQueue, listenerQueueArguments = self._AssertListenerQueueIsSet(listenerQueue, listenerQueueArguments)
         with pika.BlockingConnection(self._connParams) as connection:
             channelId = str(uuid.uuid1())
@@ -131,7 +133,8 @@ class PikaBusSetup(AbstractPikaBusSetup):
                     self._forceCloseChannelIds.pop(channelId)
         self._logger.info(f'Closing consumer channel with id {channelId}.')
 
-    def Stop(self, channelId: str = None):
+    def Stop(self,
+             channelId: str = None):
         openChannels = self.channels
         openConnections = dict(self._openConnections)
         if channelId is None:
@@ -169,7 +172,8 @@ class PikaBusSetup(AbstractPikaBusSetup):
             tasks.append(futureTask)
         return tasks
 
-    def CreateBus(self, listenerQueue: str = None):
+    def CreateBus(self,
+                  listenerQueue: str = None):
         connection = pika.BlockingConnection(self._connParams)
         channel = connection.channel()
         listenerQueue, listenerQueueArguments = self._GetListenerQueue(listenerQueue)
@@ -288,14 +292,17 @@ class PikaBusSetup(AbstractPikaBusSetup):
         }
         return data
 
-    def _GetListenerQueue(self, listenerQueue: str = None, listenerQueueArguments: dict = None):
+    def _GetListenerQueue(self,
+                          listenerQueue: str = None,
+                          listenerQueueArguments: dict = None):
         if listenerQueue is None:
             listenerQueue = self._defaultListenerQueue
         if listenerQueueArguments is None:
             listenerQueueArguments = self._defaultListenerQueueArguments
         return listenerQueue, listenerQueueArguments
 
-    def _AssertListenerQueueIsSet(self, listenerQueue: str, listenerQueueArguments: dict = None):
+    def _AssertListenerQueueIsSet(self, listenerQueue: str,
+                                  listenerQueueArguments: dict = None):
         listenerQueue, listenerQueueArguments = self._GetListenerQueue(listenerQueue, listenerQueueArguments)
         if listenerQueue is None:
             msg = "Listening queue is not set, so you cannot start the listener process."
@@ -303,5 +310,6 @@ class PikaBusSetup(AbstractPikaBusSetup):
             raise Exception(msg)
         return listenerQueue, listenerQueueArguments
 
-    def _DefaultPikaBusCreator(self, data: dict, closeConnectionOnDelete: bool = False):
+    def _DefaultPikaBusCreator(self, data: dict,
+                               closeConnectionOnDelete: bool = False):
         return PikaBus.PikaBus(data=data, closeConnectionOnDelete=closeConnectionOnDelete)
