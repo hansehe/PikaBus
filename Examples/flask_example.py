@@ -4,7 +4,6 @@ import logging
 import atexit
 from flask import Flask
 from PikaBus.abstractions.AbstractPikaBus import AbstractPikaBus
-from PikaBus.abstractions.AbstractPikaBusSetup import AbstractPikaBusSetup
 from PikaBus.PikaBusSetup import PikaBusSetup
 
 # Prequisites
@@ -41,9 +40,9 @@ connParams = pika.ConnectionParameters(
     credentials=credentials)
 
 # Create a PikaBusSetup instance with a listener queue, and add the message handler method.
-pikaBusSetup: AbstractPikaBusSetup = PikaBusSetup(connParams,
-                                                  defaultListenerQueue='myQueue',
-                                                  defaultSubscriptions='myTopic')
+pikaBusSetup = PikaBusSetup(connParams,
+                            defaultListenerQueue='myQueue',
+                            defaultSubscriptions='myTopic')
 pikaBusSetup.AddMessageHandler(MessageHandlerMethod)
 
 # Start consuming messages from the queue and register the exit function.
@@ -56,8 +55,8 @@ app = Flask(__name__)
 # Create an api route that simply publishes a message
 @app.route('/')
 def Publish():
-    bus: AbstractPikaBus = pikaBusSetup.CreateBus()
-    payload = {'hello': 'world!'}
+    bus = pikaBusSetup.CreateBus()
+    payload = {'hello': 'world!', 'reply': True}
     bus.Publish(payload=payload, topic='myTopic')
     return 'Payload published :D'
 

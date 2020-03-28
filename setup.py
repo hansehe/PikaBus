@@ -4,7 +4,7 @@ import os
 
 here = os.path.abspath(os.path.dirname(__file__))
 
-with open(os.path.join(here, 'README.md'), encoding='utf-8') as f:
+with open(os.path.join(here, 'README.rst'), encoding='utf-8') as f:
     long_description = f.read()
 
 with open('requirements.txt') as f:
@@ -18,7 +18,7 @@ setup(
     version=VERSION,  # Required
     description='Pika bus wrapper for amqp messaging with RabbitMq',  # Required
     long_description=long_description,  # Optional
-    long_description_content_type='text/markdown',  # Optional
+    long_description_content_type='text/x-rst',  # Optional
     author='Hans Erik Heggem',  # Optional
     author_email='hans.erik.heggem@gmail.com',  # Optional
     include_package_data=True,
@@ -55,7 +55,7 @@ setup(
         'test': ['coverage'],
     },
     project_urls={
-        # 'Documentation': 'https://pikabus.readthedocs.org/',
+        'Documentation': 'https://pikabus.readthedocs.org/',
         'Source': 'https://github.com/hansehe/PikaBus',
     },
 )

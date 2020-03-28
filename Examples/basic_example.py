@@ -1,12 +1,8 @@
 import asyncio
 import pika
-import logging
 import datetime
 from PikaBus.abstractions.AbstractPikaBus import AbstractPikaBus
-from PikaBus.abstractions.AbstractPikaBusSetup import AbstractPikaBusSetup
 from PikaBus.PikaBusSetup import PikaBusSetup
-
-logging.basicConfig(format=f'[%(levelname)s] %(name)s - %(message)s', level='WARNING')
 
 
 def MessageHandlerMethod(**kwargs):
@@ -32,16 +28,16 @@ connParams = pika.ConnectionParameters(
     credentials=credentials)
 
 # Create a PikaBusSetup instance with a listener queue, and add the message handler method.
-pikaBusSetup: AbstractPikaBusSetup = PikaBusSetup(connParams,
-                                                  defaultListenerQueue='myQueue',
-                                                  defaultSubscriptions='myTopic')
+pikaBusSetup = PikaBusSetup(connParams,
+                            defaultListenerQueue='myQueue',
+                            defaultSubscriptions='myTopic')
 pikaBusSetup.AddMessageHandler(MessageHandlerMethod)
 
 # Start consuming messages from the queue.
 consumingTasks = pikaBusSetup.StartAsync()
 
 # Create a temporary bus to subscribe on topics and send, defer or publish messages.
-bus: AbstractPikaBus = pikaBusSetup.CreateBus()
+bus = pikaBusSetup.CreateBus()
 bus.Subscribe('myTopic')
 payload = {'hello': 'world!', 'reply': True}
 
