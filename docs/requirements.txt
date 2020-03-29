@@ -1,3 +1,4 @@
 sphinx
-recommonmark
 sphinx-autobuild
+recommonmark==0.6.0
+sphinx-markdown-tables==0.0.12

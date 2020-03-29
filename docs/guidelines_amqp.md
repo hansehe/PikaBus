@@ -11,11 +11,8 @@ A contract defines the message payload, and is the single point of truth on what
 ## Queues
 A queue is the temporary storage of a message. All queues should be unique to every consumer context.
 
-Standard queue naming used by may be:
-- `<ServiceName>_Queue`
-
 ## Exchanges
-An exchange is the message switch on the message broker. It routes incoming messages to subscribing queues based on the message topics.
+An exchange is the message switch on the message broker. It routes incoming messages to subscribing queues based on message topics.
 
 ### Direct Exchanges
 A direct exchange matches the whole topic with subscribing queues. Thus it is used to send a message with the `command` pattern to a single receiver, as a `one-to-one` exchange.
@@ -98,12 +95,10 @@ Integration events contains as much information as possible about the event to e
 | All information about the event is contained within the message. | Data is usually copied across services, and kept consistent following the eventually consistency principle. |
 
 
-### Failed Messages
+## Error Handling
 Failed messages occur when a service fails processing the message after a given number of retries. 
 
-It is adviced to be as tolerant of failure as possible, and only throw an exception to fail the message when no other option is available.
+It is adviced to be as fault-tolerant as possible, and only throw an exception to fail the message when no other option is available.
 
-When a message fails, then the application must forward the message to a durable `error` queue for special failure handling. 
-
-The default error queue with PikaBus is called:
-- `error`
+By default, `PikaBus` implements error handling by forwarding failed messages to a durable queue named `error` 
+after 5 retry attemps with backoff policy between each attempt.

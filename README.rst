@@ -113,12 +113,11 @@ Clone `PikaBus <https://github.com/hansehe/PikaBus>`_ repo:
 
     git clone https://github.com/hansehe/PikaBus.git
 
-Start local `RabbitMq <https://www.rabbitmq.com/>`_ instance with `Docker <https://www.docker.com/products/docker-desktop>`_ and `DockerBuildManagement <https://github.com/DIPSAS/DockerBuildManagement>`_:
+Start local `RabbitMq <https://www.rabbitmq.com/>`_ instance with `Docker <https://www.docker.com/products/docker-desktop>`_:
 
 .. code-block:: shell
 
-    pip install DockerBuildManagement PikaBus
-    dbm -swarm -start
+    docker run -d --name rabbit -e RABBITMQ_DEFAULT_USER=amqp -e RABBITMQ_DEFAULT_PASS=amqp -p 5672:5672 -p 15672:15672 rabbitmq:3-management
 
 Open RabbitMq admin (user=amqp, password=amqp) at:
 
@@ -130,19 +129,22 @@ Then, run the example:
 
 .. code-block:: shell
 
+    pip install PikaBus
     python ./Examples/basic_example.py
 
 Try restarting RabbitMq to notice how PikaBus tolerates downtime:
 
 .. code-block:: shell
 
-    dbm -swarm -restart
+    docker stop rabbit
+    docker start rabbit
 
-Send more messages to the running PikaBus consumer with:
+Send or publish more messages to the running PikaBus consumer with:
 
 .. code-block:: shell
 
     python ./Examples/send_example.py
+    python ./Examples/publish_example.py
 
 Contribute
 ----------

@@ -1,6 +1,5 @@
-Authors
--------
+Contributors
+------------
+* `@hansehe`_ (author)
 
-* Hans Erik Heggem
-
-
+.. _@hansehe: https://github.com/hansehe

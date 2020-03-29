@@ -13,6 +13,9 @@ def MessageHandlerMethod(**kwargs):
     bus: AbstractPikaBus = kwargs['bus']
     payload: dict = kwargs['payload']
     print(payload)
+    if payload['reply']:
+        payload['reply'] = False
+        bus.Reply(payload=payload)
 
 
 # Use pika connection params to set connection details
@@ -25,18 +28,12 @@ connParams = pika.ConnectionParameters(
 
 # Create a PikaBusSetup instance with a listener queue, and add the message handler method.
 pikaBusSetup = PikaBusSetup(connParams,
-                            defaultListenerQueue='myQueue')
+                            defaultListenerQueue='myQueue',
+                            defaultSubscriptions='myTopic')
 pikaBusSetup.AddMessageHandler(MessageHandlerMethod)
 
 # Start consuming messages from the queue.
 consumingTasks = pikaBusSetup.StartAsync()
-
-# Create a temporary bus to send messages.
-bus = pikaBusSetup.CreateBus()
-payload = {'hello': 'world!', 'reply': True}
-
-# To send a message means sending a message explicitly to one receiver.
-bus.Send(payload=payload, queue='myQueue')
 
 input('Hit enter to stop all consuming channels \n\n')
 pikaBusSetup.Stop()

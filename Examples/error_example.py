@@ -7,8 +7,7 @@ from PikaBus.PikaErrorHandler import PikaErrorHandler
 
 def failingMessageHandlerMethod(**kwargs):
     """
-    A message handler method may simply be a method with som **kwargs.
-    The **kwargs will be given all incoming pipeline data, the bus and the incoming payload.
+    This message handler fails every time for sume dumb reason ..
     """
     data: dict = kwargs['data']
     bus: AbstractPikaBus = kwargs['bus']
