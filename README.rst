@@ -25,7 +25,7 @@ PikaBus
 The `PikaBus <https://github.com/hansehe/PikaBus>`_ library is a wrapper around `pika <https://pypi.org/project/pika/>`_ 
 to make it easy to implement the messages, events and command pattern, as described in detail here:
 
-- https://pikabus.readthedocs.org/guidelines_amqp.html
+- https://pikabus.readthedocs.io/en/latest/guidelines_amqp.html
 
 Features
 --------
