@@ -7,7 +7,7 @@ class AbstractPikaSerializer(abc.ABC):
         """
         :param dict data: General data holder dictionary
         :param payload: payload to serialize
-        :return: (bytes, str) body, contentType
+        :return: (bytes, str, str) body, contentType, contentEncoding
         """
         pass
 

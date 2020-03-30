@@ -8,10 +8,10 @@ Installation with pip:
 
     pip install PikaBus
 
-Installation with git:
+Installation from source:
 
 .. code-block:: shell
 
     git clone https://github.com/hansehe/PikaBus.git
-    cd PikaBus
+    cd ./PikaBus/
     python setup.py install

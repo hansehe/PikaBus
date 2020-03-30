@@ -30,7 +30,11 @@ to make it easy to implement the messages, events and command pattern, as descri
 Features
 --------
 
-- Both synchronous and asynchronous API.
+- Secure messaging with amqp enabled by default, which includes:
+    - Durable and mirrored queues on all nodes.
+    - Persistent messages, meaning no messages are lost after a node restart.
+    - Delivery confirms with `RabbitMq publisher confirms <https://www.rabbitmq.com/confirms.html>`_.
+    - Mandatory delivery turned on by default to guarantee at least once delivery.
 - Object oriented API with short and easy-to-use interface.
 - Fault-tolerant with auto-reconnect retry logic and state recovery.
 

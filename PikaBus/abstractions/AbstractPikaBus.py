@@ -8,15 +8,13 @@ class AbstractPikaBus(abc.ABC):
              queue: str = None,
              headers: dict = {},
              messageType: str = None,
-             exchange: str = None,
-             exchangeArguments: dict = None):
+             exchange: str = None):
         """
         :param dict payload: Payload to send
         :param str queue: Destination queue. If None, then it it sent back to the listener queue.
         :param dict headers: Optional headers to add or override
         :param str messageType: Specify message type if necessary.
         :param str exchange: Optional exchange to override with.
-        :param str exchangeArguments: Optional exchange arguments to override with.
         """
         pass
 
@@ -25,14 +23,14 @@ class AbstractPikaBus(abc.ABC):
                 headers: dict = {},
                 messageType: str = None,
                 exchange: str = None,
-                exchangeArguments: dict = None):
+                mandatory: bool = True):
         """
         :param dict payload: Payload to publish
         :param str topic: Topic.
         :param dict headers: Optional headers to add or override
         :param str messageType: Specify message type if necessary.
         :param str exchange: Optional exchange to override with.
-        :param str exchangeArguments: Optional exchange arguments to override with.
+        :param bool mandatory: Mandatory delivery to at least one consumer.
         """
         pass
 
@@ -40,14 +38,12 @@ class AbstractPikaBus(abc.ABC):
     def Reply(self, payload: dict,
               headers: dict = {},
               messageType: str = None,
-              exchange: str = None,
-              exchangeArguments: dict = None):
+              exchange: str = None):
         """
         :param dict payload: Payload to reply
         :param dict headers: Optional headers to add or override
         :param str messageType: Specify message type if necessary.
         :param str exchange: Optional exchange to override with.
-        :param str exchangeArguments: Optional exchange arguments to override with.
         """
         pass
 
@@ -56,8 +52,7 @@ class AbstractPikaBus(abc.ABC):
               queue: str = None,
               headers: dict = {},
               messageType: str = None,
-              exchange: str = None,
-              exchangeArguments: dict = None):
+              exchange: str = None):
         """
         :param dict payload: Payload to send
         :param datetime.timedelta delay: Delayed relative time from now to process the message.
@@ -65,20 +60,17 @@ class AbstractPikaBus(abc.ABC):
         :param dict headers: Optional headers to add or override
         :param str messageType: Specify message type if necessary.
         :param str exchange: Optional exchange to override with.
-        :param str exchangeArguments: Optional exchange arguments to override with.
         """
         pass
 
     @abc.abstractmethod
     def Subscribe(self, topic: str,
                   queue: str = None,
-                  exchange: str = None,
-                  exchangeArguments: dict = None):
+                  exchange: str = None):
         """
         :param str | [str] topic: A topic or a list of topics to subscribe.
         :param str queue: Queue to bind the topic(s). If None, then default listener queue is used.
         :param exchange: Optional exchange to override with.
-        :param str exchangeArguments: Optional exchange arguments to override with.
         """
         pass
 

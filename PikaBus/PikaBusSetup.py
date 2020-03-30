@@ -22,7 +22,7 @@ class PikaBusSetup(AbstractPikaBusSetup):
                  defaultSubscriptions = [],
                  defaultDirectExchange: str = 'PikaBusDirect',
                  defaultTopicExchange: str = 'PikaBusTopic',
-                 defaultListenerQueueArguments: dict = None,
+                 defaultListenerQueueArguments: dict = {'ha-mode': 'all'},
                  defaultDirectExchangeArguments: dict = None,
                  defaultTopicExchangeArguments: dict = None,
                  pikaSerializer: AbstractPikaSerializer = None,
@@ -30,6 +30,7 @@ class PikaBusSetup(AbstractPikaBusSetup):
                  pikaErrorHandler: AbstractPikaErrorHandler = None,
                  pikaBusCreateMethod=None,
                  retryParams: dict = None,
+                 confirmDelivery: bool = True,
                  logger=logging.getLogger(__name__)):
         """
         :param pika.ConnectionParameters connParams: Pika connection parameters.
@@ -37,7 +38,7 @@ class PikaBusSetup(AbstractPikaBusSetup):
         :param [str] | str defaultSubscriptions: Default topic or a list of topics to subscribe.
         :param str defaultDirectExchange: Default command exchange to publish direct command messages. The command pattern is used to directly sending a message to one consumer.
         :param str defaultTopicExchange: Default event exchange to publish event messages. The event pattern is used to publish a message to any listening consumers.
-        :param dict defaultListenerQueueArguments: Default listener queue arguments.
+        :param dict defaultListenerQueueArguments: Default listener queue arguments. `ha-mode: all` is activated by default to mirror the listener queue across all nodes.
         :param dict defaultDirectExchangeArguments: Default direct exchange arguments.
         :param dict defaultTopicExchangeArguments: Default topic exchange arguments.
         :param AbstractPikaSerializer pikaSerializer: Optional serializer override.
@@ -45,6 +46,7 @@ class PikaBusSetup(AbstractPikaBusSetup):
         :param AbstractPikaErrorHandler pikaErrorHandler: Optional error handler override.
         :param def pikaBusCreateMethod: Optional pikaBus creator method which returns an instance of AbstractPikaBus.
         :param dict retryParams: A set of retry parameters. See options below in code.
+        :param bool confirmDelivery: Activate confirm delivery with publisher confirms on all channels.
         :param logging logger: Logging object
         """
         if isinstance(defaultSubscriptions, str):
@@ -79,6 +81,7 @@ class PikaBusSetup(AbstractPikaBusSetup):
         self._openConnections = {}
         self._pikaBusCreateMethod = pikaBusCreateMethod
         self._retryParams = retryParams
+        self._confirmDelivery = confirmDelivery
         self._logger = logger
 
     def __del__(self):
@@ -105,8 +108,7 @@ class PikaBusSetup(AbstractPikaBusSetup):
             onMessageCallback = functools.partial(self._OnMessageCallBack,
                                                   connection=connection,
                                                   channelId=channelId,
-                                                  listenerQueue=listenerQueue,
-                                                  listenerQueueArguments=listenerQueueArguments)
+                                                  listenerQueue=listenerQueue)
             channel: pika.adapters.blocking_connection.BlockingChannel = connection.channel()
             self._CreateDefaultRabbitMqSetup(channel, listenerQueue, listenerQueueArguments)
             channel.basic_consume(listenerQueue, onMessageCallback)
@@ -176,8 +178,10 @@ class PikaBusSetup(AbstractPikaBusSetup):
                   listenerQueue: str = None):
         connection = pika.BlockingConnection(self._connParams)
         channel = connection.channel()
+        if self._confirmDelivery:
+            channel.confirm_delivery()
         listenerQueue, listenerQueueArguments = self._GetListenerQueue(listenerQueue)
-        data = self._CreateDefaultDataHolder(connection, channel, listenerQueue, listenerQueueArguments)
+        data = self._CreateDefaultDataHolder(connection, channel, listenerQueue)
         pikaBus: AbstractPikaBus = self._pikaBusCreateMethod(data=data, closeConnectionOnDelete=True)
         return pikaBus
 
@@ -220,6 +224,8 @@ class PikaBusSetup(AbstractPikaBusSetup):
                                     directExchange: str = None,
                                     directExchangeArguments: dict = None,
                                     subscriptions: list = None):
+        if self._confirmDelivery:
+            channel.confirm_delivery()
         if topicExchange is None:
             topicExchange = self._defaultTopicExchange
         if topicExchangeArguments is None:
@@ -232,7 +238,8 @@ class PikaBusSetup(AbstractPikaBusSetup):
             subscriptions = self._defaultSubscriptions
         PikaTools.CreateDurableQueue(channel, listenerQueue, arguments=listenerQueueArguments)
         PikaTools.CreateExchange(channel, directExchange, arguments=directExchangeArguments)
-        PikaTools.BasicSubscribe(channel, topicExchange, subscriptions, listenerQueue, exchangeArguments=topicExchangeArguments)
+        PikaTools.CreateExchange(channel, topicExchange, exchangeType='topic', arguments=topicExchangeArguments)
+        PikaTools.BasicSubscribe(channel, topicExchange, subscriptions, listenerQueue)
 
     def _BuildPikaPipeline(self):
         pipeline = [
@@ -251,10 +258,9 @@ class PikaBusSetup(AbstractPikaBusSetup):
                            body: bytes,
                            connection: pika.BlockingConnection,
                            channelId: str,
-                           listenerQueue: str,
-                           listenerQueueArguments: dict):
+                           listenerQueue: str):
         self._logger.debug(f"Received new message on channel {channelId}")
-        data = self._CreateDefaultDataHolder(connection, channel, listenerQueue, listenerQueueArguments)
+        data = self._CreateDefaultDataHolder(connection, channel, listenerQueue)
         data[PikaConstants.DATA_KEY_MESSAGE_HANDLERS] = list(self.messageHandlers)
         incomingMessage = {
             PikaConstants.DATA_KEY_METHOD_FRAME: methodFrame,
@@ -273,15 +279,11 @@ class PikaBusSetup(AbstractPikaBusSetup):
     def _CreateDefaultDataHolder(self,
                                  connection: pika.BlockingConnection,
                                  channel: pika.adapters.blocking_connection.BlockingChannel,
-                                 listenerQueue: str,
-                                 listenerQueueArguments: dict):
+                                 listenerQueue: str):
         data = {
             PikaConstants.DATA_KEY_LISTENER_QUEUE: listenerQueue,
-            PikaConstants.DATA_KEY_LISTENER_QUEUE_ARGUMENTS: listenerQueueArguments,
             PikaConstants.DATA_KEY_DIRECT_EXCHANGE: self._defaultDirectExchange,
             PikaConstants.DATA_KEY_TOPIC_EXCHANGE: self._defaultTopicExchange,
-            PikaConstants.DATA_KEY_DIRECT_EXCHANGE_ARGUMENTS: self._defaultDirectExchangeArguments,
-            PikaConstants.DATA_KEY_TOPIC_EXCHANGE_ARGUMENTS: self._defaultTopicExchangeArguments,
             PikaConstants.DATA_KEY_CONNECTION: connection,
             PikaConstants.DATA_KEY_CHANNEL: channel,
             PikaConstants.DATA_KEY_SERIALIZER: self._pikaSerializer,

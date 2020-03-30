@@ -10,7 +10,6 @@ def ResendMessage(data: dict,
                   body: bytes = None,
                   headers: dict = None,
                   exchange: str = None,
-                  exchangeArguments: dict = None,
                   exception: Exception = None):
     if destinationQueue is None:
         destinationQueue: str = data[PikaConstants.DATA_KEY_LISTENER_QUEUE]
@@ -22,7 +21,6 @@ def ResendMessage(data: dict,
                                          intent=intent,
                                          headers=headers,
                                          exchange=exchange,
-                                         exchangeArguments=exchangeArguments,
                                          exception=exception)
 
     outgoingMessage[PikaConstants.DATA_KEY_BODY] = body
@@ -42,26 +40,22 @@ def SendOrPublishOutgoingMessage(data: dict, outgoingMessage: dict):
     propertyBuilder: AbstractPikaProperties = data[PikaConstants.DATA_KEY_PROPERTY_BUILDER]
     properties = propertyBuilder.GetPikaProperties(data, outgoingMessage)
     exchange = outgoingMessage[PikaConstants.DATA_KEY_EXCHANGE]
-    exchangeArguments = outgoingMessage[PikaConstants.DATA_KEY_EXCHANGE_ARGUMENTS]
     topicOrQueue = outgoingMessage[PikaConstants.DATA_KEY_TOPIC]
     body = outgoingMessage[PikaConstants.DATA_KEY_BODY]
     intent = outgoingMessage[PikaConstants.DATA_KEY_INTENT]
+    mandatory = outgoingMessage[PikaConstants.DATA_KEY_MANDATORY_DELIVERY]
     if intent == PikaConstants.INTENT_EVENT:
         if exchange is None:
             exchange = data[PikaConstants.DATA_KEY_TOPIC_EXCHANGE]
-        if exchangeArguments is None:
-            exchangeArguments = data[PikaConstants.DATA_KEY_TOPIC_EXCHANGE_ARGUMENTS]
         PikaTools.BasicPublish(channel, exchange, topicOrQueue, body,
                                properties=properties,
-                               exchangeArguments=exchangeArguments)
+                               mandatory=mandatory)
     elif intent == PikaConstants.INTENT_COMMAND:
         if exchange is None:
             exchange = data[PikaConstants.DATA_KEY_DIRECT_EXCHANGE]
-        if exchangeArguments is None:
-            exchangeArguments = data[PikaConstants.DATA_KEY_DIRECT_EXCHANGE_ARGUMENTS]
         PikaTools.BasicSend(channel, exchange, topicOrQueue, body,
                             properties=properties,
-                            exchangeArguments=exchangeArguments)
+                            mandatory=mandatory)
     else:
         msg = f'Outgoing type {intent} is not implemented!'
         logger.exception(msg)
@@ -73,7 +67,7 @@ def AppendOutgoingMessage(data: dict, payload: dict, topicOrQueue: str,
                           headers: dict = {},
                           messageType: str = None,
                           exchange: str = None,
-                          exchangeArguments: dict = None,
+                          mandatory: bool = True,
                           exception: Exception = None):
     outgoingMessage = GetOutgoingMessage(data, topicOrQueue,
                                          payload=payload,
@@ -81,7 +75,7 @@ def AppendOutgoingMessage(data: dict, payload: dict, topicOrQueue: str,
                                          headers=headers,
                                          messageType=messageType,
                                          exchange=exchange,
-                                         exchangeArguments=exchangeArguments,
+                                         mandatory=mandatory,
                                          exception=exception)
 
     if not PikaConstants.DATA_KEY_OUTGOING_MESSAGES in data:
@@ -95,20 +89,21 @@ def GetOutgoingMessage(data: dict, topicOrQueue: str,
                        headers: dict = {},
                        messageType: str = None,
                        exchange: str = None,
-                       exchangeArguments: dict = None,
+                       mandatory: bool = True,
                        exception: Exception = None):
     serializer: AbstractPikaSerializer = data[PikaConstants.DATA_KEY_SERIALIZER]
-    body, contentType = serializer.Serialize(data, payload)
+    body, contentType, encoding = serializer.Serialize(data, payload)
     outgoingMessage = {
         PikaConstants.DATA_KEY_INTENT: intent,
         PikaConstants.DATA_KEY_PAYLOAD: payload,
         PikaConstants.DATA_KEY_TOPIC: topicOrQueue,
         PikaConstants.DATA_KEY_BODY: body,
         PikaConstants.DATA_KEY_CONTENT_TYPE: contentType,
+        PikaConstants.DATA_KEY_CONTENT_ENCODING: encoding,
         PikaConstants.DATA_KEY_HEADERS: headers,
         PikaConstants.DATA_KEY_MESSAGE_TYPE: messageType,
         PikaConstants.DATA_KEY_EXCHANGE: exchange,
-        PikaConstants.DATA_KEY_EXCHANGE_ARGUMENTS: exchangeArguments,
+        PikaConstants.DATA_KEY_MANDATORY_DELIVERY: mandatory,
         PikaConstants.DATA_KEY_EXCEPTION: exception,
     }
 

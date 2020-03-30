@@ -57,27 +57,20 @@ def SafeCloseConnection(connection: pika.BlockingConnection, acceptAllFailures: 
 def BasicSend(channel: pika.adapters.blocking_connection.BlockingChannel,
               exchange: str, destination: str, body: bytes,
               properties: pika.spec.BasicProperties = None,
-              exchangeType: str = 'direct',
-              exchangeArguments: str = None):
-    CreateExchange(channel, exchange, exchangeType=exchangeType, arguments=exchangeArguments)
+              mandatory: bool = True):
     BindQueue(channel, queue=destination, exchange=exchange, topic=destination)
-    channel.basic_publish(exchange, destination, body, properties=properties)
+    channel.basic_publish(exchange, destination, body, properties=properties, mandatory=mandatory)
 
 
 def BasicPublish(channel: pika.adapters.blocking_connection.BlockingChannel,
                  exchange: str, topic: str, body: bytes,
                  properties: pika.spec.BasicProperties = None,
-                 exchangeType: str = 'topic',
-                 exchangeArguments: dict = None):
-    CreateExchange(channel, exchange, exchangeType=exchangeType, arguments=exchangeArguments)
-    channel.basic_publish(exchange, topic, body, properties=properties)
+                 mandatory: bool = True):
+    channel.basic_publish(exchange, topic, body, properties=properties, mandatory=mandatory)
 
 
 def BasicSubscribe(channel: pika.adapters.blocking_connection.BlockingChannel,
-                   exchange: str, topic: str, queue: str,
-                   exchangeType: str = 'topic',
-                   exchangeArguments: dict = None):
-    CreateExchange(channel, exchange, exchangeType=exchangeType, arguments=exchangeArguments)
+                   exchange: str, topic: str, queue: str):
     if isinstance(topic, list):
         topics = topic
     else:

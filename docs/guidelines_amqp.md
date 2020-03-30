@@ -29,13 +29,14 @@ The default `topic exchange` used by PikaBus is named:
 ## Message Headers
 All messages comes with headers giving some basic information about the message. PikaBus have defined a standard set of headers to enable different service implementations to comply on a common set of headers. The default `PikaBus` prefix is possible to change as preferred.
 
-| Header Key                     | Header Value Type                 | Description                                                                                                           |
-|--------------------------------|-----------------------------------|-----------------------------------------------------------------------------------------------------------------------|
+| Header Key                       | Header Value Type                 | Description                                                                                                           |
+|----------------------------------|-----------------------------------|-----------------------------------------------------------------------------------------------------------------------|
 | PikaBus.MessageId                | Guid                              | Unique message id.                                                                                                    |
 | PikaBus.CorrelationId            | Guid                              | Unique message correlation id.                                                                                        |
 | PikaBus.ReplyToAddress           | String                            | Which address/queue to send replies.                                                                                  |
 | PikaBus.OriginatingAddress       | String                            | Originating address/queue.                                                                                            |
-| PikaBus.ContentType              | String                            | Content type, commonly `application/json;charset=utf8`.                                                               |
+| PikaBus.ContentType              | String                            | Content type, commonly `application/json`.                                                                            |
+| PikaBus.ContentEncoding          | String                            | Content encoding, commonly `utf-8`.                                                                                   |
 | PikaBus.MessageType              | String                            | Optional contract namespace of message type, commonly `<CONTRACT_NAMESPACE>.<CONTRACT_TYPE>`.                         |
 | PikaBus.Intent                   | String                            | Message intent - `command` or `event`.                                                                                |
 | PikaBus.TimeSent                 | String                            | UTC timestamp at what time the message was sent, commonly `07/22/2019 11:40:19` - (`month/day/year hour:min:sec`).    |
