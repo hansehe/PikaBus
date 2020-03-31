@@ -153,5 +153,5 @@ class PikaProperties(AbstractPikaProperties):
                                                reply_to=headers.get(self.replyToAddressHeaderKey, None),
                                                message_id=headers.get(self.messageIdHeaderKey, None),
                                                timestamp=unixTime,
-                                               type=headers.get(self.contentTypeHeaderKey, None))
+                                               type=headers.get(self.messsageTypeHeaderKey, None))
         return properties
