@@ -149,9 +149,14 @@ class PikaProperties(AbstractPikaProperties):
                                                content_encoding=headers.get(self.contentEncodingHeaderKey, None),
                                                headers=headers,
                                                delivery_mode=self._deliveryMode,
+                                               priority=headers.get('priority', None),
                                                correlation_id=headers.get(self.correlationIdHeaderKey, None),
                                                reply_to=headers.get(self.replyToAddressHeaderKey, None),
+                                               expiration=headers.get('expiration', None),
                                                message_id=headers.get(self.messageIdHeaderKey, None),
                                                timestamp=unixTime,
-                                               type=headers.get(self.messsageTypeHeaderKey, None))
+                                               type=headers.get(self.messsageTypeHeaderKey, None),
+                                               user_id=headers.get('user_id', None),
+                                               app_id=headers.get('app_id', None),
+                                               cluster_id=headers.get('cluster_id', None))
         return properties

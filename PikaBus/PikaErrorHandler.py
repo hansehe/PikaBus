@@ -10,21 +10,21 @@ from PikaBus.abstractions.AbstractPikaProperties import AbstractPikaProperties
 class PikaErrorHandler(AbstractPikaErrorHandler):
     def __init__(self,
                  errorQueue = 'error',
-                 errorQueueArguments: dict = None,
+                 errorQueueSettings: dict = {'arguments': {'ha-mode': 'all'}},
                  maxRetries: int = 5,
                  delay: int = 1,
                  backoff: int = 2,
                  logger=logging.getLogger(__name__)):
         """
         :param str errorQueue: Error queue to dump a failing message.
-        :param dict errorQueueArguments: Optional error queue arguments.
+        :param dict errorQueueSettings: Optional error queue settings. 'arguments': {`ha-mode: all`} is activated by default to mirror the queue across all nodes.
         :param int maxRetries: Max retries of a failing message before it is sent to the error queue. -1 is infinite.
         :param int delay: initial delay in seconds between attempts. 0 is no delay.
         :param int backoff: Multiplier applied to delay between attempts. 0 is no back off.
         :param logging logger: Logging object
         """
         self._errorQueue = errorQueue
-        self._errorQueueArguments = errorQueueArguments
+        self._errorQueueSettings = errorQueueSettings
         self._maxRetries = maxRetries
         self._delay = delay
         self._backoff = backoff
@@ -49,7 +49,7 @@ class PikaErrorHandler(AbstractPikaErrorHandler):
 
         if retries > self._maxRetries >= 0 or destinationQueue is None:
             destinationQueue = self._errorQueue
-            PikaTools.CreateDurableQueue(channel, destinationQueue, arguments=self._errorQueueArguments)
+            PikaTools.CreateDurableQueue(channel, destinationQueue, settings=self._errorQueueSettings)
             self._logger.info(f'Moving failed message with id {messageId} '
                               f'to error queue {destinationQueue}')
         elif self._delay > 0:

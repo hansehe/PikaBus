@@ -5,13 +5,24 @@ import logging
 
 
 def CreateDurableQueue(channel: pika.adapters.blocking_connection.BlockingChannel, queue: str,
-                       arguments: dict = None):
-    channel.queue_declare(queue, durable=True, passive=False, arguments=arguments)
+                       settings: dict = {}):
+    channel.queue_declare(queue,
+                          passive=settings.get('passive', False),
+                          durable=settings.get('durable', True),
+                          exclusive=settings.get('exclusive', False),
+                          auto_delete=settings.get('auto_delete', False),
+                          arguments=settings.get('arguments', None))
 
 
 def CreateExchange(channel: pika.adapters.blocking_connection.BlockingChannel, exchange: str,
-                   exchangeType: str = 'direct', arguments: dict = None):
-    channel.exchange_declare(exchange, exchange_type=exchangeType, passive=False, durable=True, arguments=arguments)
+                   settings: dict = {}):
+    channel.exchange_declare(exchange,
+                             exchange_type=settings.get('exchange_type', 'direct'),
+                             passive=settings.get('passive', False),
+                             durable=settings.get('durable', True),
+                             auto_delete=settings.get('auto_delete', False),
+                             internal=settings.get('internal', False),
+                             arguments=settings.get('arguments', None))
 
 
 def BindQueue(channel: pika.adapters.blocking_connection.BlockingChannel, queue: str, exchange: str, topic: str,
