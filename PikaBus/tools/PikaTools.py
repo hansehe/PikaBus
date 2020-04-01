@@ -81,20 +81,28 @@ def BasicPublish(channel: pika.adapters.blocking_connection.BlockingChannel,
 
 
 def BasicSubscribe(channel: pika.adapters.blocking_connection.BlockingChannel,
-                   exchange: str, topic: str, queue: str):
+                   exchange: str, topic: str, queue: str,
+                   arguments: dict = None):
     if isinstance(topic, list):
         topics = topic
     else:
         topics = [topic]
     for topic in topics:
-        BindQueue(channel, queue, exchange, topic)
+        if isinstance(topic, dict):
+            arguments = topic.get('arguments', None)
+            topic = topic.get('topic', None)
+        BindQueue(channel, queue, exchange, topic, arguments=arguments)
 
 
 def BasicUnsubscribe(channel: pika.adapters.blocking_connection.BlockingChannel,
-                     exchange: str, topic: str, queue: str):
+                     exchange: str, topic: str, queue: str,
+                     arguments: dict = None):
     if isinstance(topic, list):
         topics = topic
     else:
         topics = [topic]
     for topic in topics:
-        UnbindQueue(channel, queue, exchange, topic)
+        if isinstance(topic, dict):
+            arguments = topic.get('arguments', None)
+            topic = topic.get('topic', None)
+        UnbindQueue(channel, queue, exchange, topic, arguments=arguments)
