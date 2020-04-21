@@ -148,7 +148,7 @@ class PikaProperties(AbstractPikaProperties):
         properties = pika.spec.BasicProperties(content_type=headers.get(self.contentTypeHeaderKey, None),
                                                content_encoding=headers.get(self.contentEncodingHeaderKey, None),
                                                headers=headers,
-                                               delivery_mode=self._deliveryMode,
+                                               delivery_mode=headers.get('delivery_mode', self._deliveryMode),
                                                priority=headers.get('priority', None),
                                                correlation_id=headers.get(self.correlationIdHeaderKey, None),
                                                reply_to=headers.get(self.replyToAddressHeaderKey, None),
