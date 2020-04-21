@@ -35,6 +35,17 @@ class AbstractPikaBusSetup(abc.ABC):
         pass
 
     @abc.abstractmethod
+    def Init(self,
+             listenerQueue: str = None,
+             listenerQueueSettings: dict = None):
+        """
+        :param str listenerQueue: Optional listener queue to override default listener queue.
+        :param dict listenerQueueSettings: Optional listener queue settings.
+        Initialize RabbitMq without starting a consumer by creating exchanges and the listener queue.
+        """
+        pass
+
+    @abc.abstractmethod
     def Start(self,
               listenerQueue: str = None,
               listenerQueueSettings: dict = None):

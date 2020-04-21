@@ -92,6 +92,16 @@ class TestPikaBus(unittest.TestCase):
         bus.Unsubscribe(topic)
         bus.Unsubscribe([topic, topic])
 
+    def test_bus_publisher(self):
+        TestTools.WaitUntilRabbitLives()
+        topic = TestTools.GetRandomTopic()
+        publisedPayload = TestTools.GetPayload()
+        pikaBusSetup = TestTools.GetPikaBusSetup(topics=topic)
+        pikaBusSetup.Init()
+        bus = pikaBusSetup.CreateBus()
+        self.assertRaises(Exception, bus.Publish, payload=publisedPayload, topic=topic)
+        bus.Publish(payload=publisedPayload, topic=topic, mandatory=False)
+
 
 if __name__ == '__main__':
     unittest.main()

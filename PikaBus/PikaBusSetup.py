@@ -99,6 +99,14 @@ class PikaBusSetup(AbstractPikaBusSetup):
     def messageHandlers(self):
         return self._messageHandlers
 
+    def Init(self,
+             listenerQueue: str = None,
+             listenerQueueSettings: dict = None):
+        listenerQueue, listenerQueueSettings = self._GetListenerQueue(listenerQueue, listenerQueueSettings)
+        self._AssertConnection(listenerQueue=listenerQueue,
+                               listenerQueueSettings=listenerQueueSettings,
+                               createDefaultRabbitMqSetup=True)
+
     def Start(self,
               listenerQueue: str = None,
               listenerQueueSettings: dict = None):
@@ -236,10 +244,11 @@ class PikaBusSetup(AbstractPikaBusSetup):
             directExchangeSettings = self._defaultDirectExchangeSettings
         if subscriptions is None:
             subscriptions = self._defaultSubscriptions
-        PikaTools.CreateDurableQueue(channel, listenerQueue, settings=listenerQueueSettings)
         PikaTools.CreateExchange(channel, directExchange, settings=directExchangeSettings)
         PikaTools.CreateExchange(channel, topicExchange, settings=topicExchangeSettings)
-        PikaTools.BasicSubscribe(channel, topicExchange, subscriptions, listenerQueue)
+        if listenerQueue is not None:
+            PikaTools.CreateDurableQueue(channel, listenerQueue, settings=listenerQueueSettings)
+            PikaTools.BasicSubscribe(channel, topicExchange, subscriptions, listenerQueue)
 
     def _BuildPikaPipeline(self):
         pipeline = [
