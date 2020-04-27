@@ -19,4 +19,4 @@ class PikaSerializer(AbstractPikaSerializer):
         return json.dumps(payload).encode(self._contentEncoding), self._defaultContentType, self._contentEncoding
 
     def Deserialize(self, data: dict, body: bytes):
-        return json.loads(body.decode(self._contentEncoding))
+        return json.loads(body)
