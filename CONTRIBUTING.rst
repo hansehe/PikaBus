@@ -38,8 +38,9 @@ Publish Pypi Package
 --------------------
 1. Configure setup.py with new version.
 2. Package: python setup.py bdist_wheel
-3. Publish: twine upload dist/*
-4. Or with dbm:
+3. Publish: twine check dist/*
+4. Publish: twine upload dist/*
+5. Or with dbm:
 
 .. code-block:: shell
 
