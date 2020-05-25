@@ -3,6 +3,7 @@ from pika import frame, exceptions
 import asyncio
 import uuid
 import logging
+import random
 from concurrent.futures import ThreadPoolExecutor
 import functools
 import retry
@@ -90,6 +91,10 @@ class PikaBusSetup(AbstractPikaBusSetup):
     @property
     def pipeline(self):
         return self._pipeline
+
+    @property
+    def connections(self):
+        return dict(self._openConnections)
 
     @property
     def channels(self):
@@ -183,14 +188,30 @@ class PikaBusSetup(AbstractPikaBusSetup):
         return tasks
 
     def CreateBus(self,
-                  listenerQueue: str = None):
-        connection = pika.BlockingConnection(self._connParams)
+                  listenerQueue: str = None,
+                  connectionId: str = None,
+                  createNewConnection: bool = False):
+
+        openConnections = self.connections
+        if connectionId is None and len(openConnections) > 0:
+            connectionId = random.choice(list(openConnections.keys()))
+
+        if connectionId is None or createNewConnection:
+            closeConnectionOnDelete = True
+            connection = pika.BlockingConnection(self._connParams)
+        else:
+            closeConnectionOnDelete = False
+            connection = openConnections[connectionId]
+
         channel = connection.channel()
         if self._confirmDelivery:
             channel.confirm_delivery()
+
         listenerQueue, listenerQueueSettings = self._GetListenerQueue(listenerQueue)
         data = self._CreateDefaultDataHolder(connection, channel, listenerQueue)
-        pikaBus: AbstractPikaBus = self._pikaBusCreateMethod(data=data, closeConnectionOnDelete=True)
+        pikaBus: AbstractPikaBus = self._pikaBusCreateMethod(data=data,
+                                                             closeChannelOnDelete=True,
+                                                             closeConnectionOnDelete=closeConnectionOnDelete)
         return pikaBus
 
     def AddMessageHandler(self, messageHandler: AbstractPikaMessageHandler):
@@ -278,7 +299,9 @@ class PikaBusSetup(AbstractPikaBusSetup):
         }
         data[PikaConstants.DATA_KEY_INCOMING_MESSAGE] = incomingMessage
 
-        pikaBus: AbstractPikaBus = self._pikaBusCreateMethod(data=data, closeConnectionOnDelete=False)
+        pikaBus: AbstractPikaBus = self._pikaBusCreateMethod(data=data,
+                                                             closeChannelOnDelete=False,
+                                                             closeConnectionOnDelete=False)
         data[PikaConstants.DATA_KEY_BUS] = pikaBus
 
         pipelineIterator = iter(self._pipeline)
@@ -322,5 +345,8 @@ class PikaBusSetup(AbstractPikaBusSetup):
         return listenerQueue, listenerQueueSettings
 
     def _DefaultPikaBusCreator(self, data: dict,
+                               closeChannelOnDelete: bool = False,
                                closeConnectionOnDelete: bool = False):
-        return PikaBus.PikaBus(data=data, closeConnectionOnDelete=closeConnectionOnDelete)
+        return PikaBus.PikaBus(data=data,
+                               closeChannelOnDelete=closeChannelOnDelete,
+                               closeConnectionOnDelete=closeConnectionOnDelete)

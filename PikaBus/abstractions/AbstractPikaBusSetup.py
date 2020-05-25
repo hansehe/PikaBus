@@ -18,6 +18,15 @@ class AbstractPikaBusSetup(abc.ABC):
 
     @property
     @abc.abstractmethod
+    def connections(self):
+        """
+        returns all open connections as a dictionary with keys as the connection ids.
+        :rtype: dict{id: pika.adapters.blocking_connection}
+        """
+        pass
+
+    @property
+    @abc.abstractmethod
     def channels(self):
         """
         returns all open channels as a dictionary with keys as the channel ids.
@@ -61,7 +70,7 @@ class AbstractPikaBusSetup(abc.ABC):
              channelId: str = None):
         """
         Stop blocking bus consumer channel.
-        :param str channelId: Optional channel id. Get open channels with self.channels().
+        :param str channelId: Optional channel id. Get open channels with self.channels.
         """
         pass
 
@@ -85,10 +94,14 @@ class AbstractPikaBusSetup(abc.ABC):
 
     @abc.abstractmethod
     def CreateBus(self,
-                  listenerQueue: str = None):
+                  listenerQueue: str = None,
+                  connectionId: str = None,
+                  createNewConnection: bool = False):
         """
         Create bus with separate channel.
         :param str listenerQueue: Optional listener queue to override default listener queue.
+        :param str connectionId: Optional connection id to reuse an open connection. Get open connections with self.connections.
+        :param bool createNewConnection: Optionally create a new connection instead of reusing an existing connection.
         :rtype: PikaBus.abstractions.AbstractPikaBus.AbstractPikaBus
         """
         pass

@@ -9,10 +9,12 @@ from PikaBus.abstractions.AbstractPikaProperties import AbstractPikaProperties
 
 class PikaBus(AbstractPikaBus):
     def __init__(self, data: dict,
+                 closeChannelOnDelete: bool = False,
                  closeConnectionOnDelete: bool = False,
                  logger=logging.getLogger(__name__)):
         """
         :param dict data: General data holder
+        :param bool closeChannelOnDelete: True if the channel stored in 'data' should be closed on instance deletion.
         :param bool closeConnectionOnDelete: True if the connection stored in 'data' should be closed on instance deletion.
         :param logging logger: Logging object
         """
@@ -24,10 +26,13 @@ class PikaBus(AbstractPikaBus):
         self._directExchange: str = data[PikaConstants.DATA_KEY_DIRECT_EXCHANGE]
         self._topicExchange: str = data[PikaConstants.DATA_KEY_TOPIC_EXCHANGE]
         self._transaction: bool = False
+        self._closeChannelOnDelete = closeChannelOnDelete
         self._closeConnectionOnDelete = closeConnectionOnDelete
         self._logger = logger
 
     def __del__(self):
+        if self._closeChannelOnDelete:
+            PikaTools.SafeCloseChannel(self._channel)
         if self._closeConnectionOnDelete:
             PikaTools.SafeCloseConnection(self._connection)
 

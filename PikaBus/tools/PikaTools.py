@@ -52,6 +52,19 @@ def AssertDurableQueueExists(connection: pika.BlockingConnection, queue: str, re
     raise Exception(msg)
 
 
+def SafeCloseChannel(channel: pika.BlockingConnection.channel, acceptAllFailures: bool = True):
+    if channel.is_closed:
+        return
+    try:
+        channel.close()
+    except pika.exceptions.ChannelWrongStateError:
+        # channel already closed
+        pass
+    except:
+        if not acceptAllFailures:
+            raise
+
+
 def SafeCloseConnection(connection: pika.BlockingConnection, acceptAllFailures: bool = True):
     if connection.is_closed:
         return
