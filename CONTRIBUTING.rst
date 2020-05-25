@@ -46,6 +46,17 @@ Publish Pypi Package
 
   dbm -build -publish 
 
+6. Or directly with docker:
+
+.. code-block:: shell
+
+  docker run -it -v $PWD/:/data -w /data python:3.8-buster bash
+  # From inside container, run:
+  pip install twine wheel
+  python setup.py bdist_wheel
+  twine check dist/*
+  twine upload dist/*
+
 Sphinx Documentation
 --------------------
 Do following commands, and locate the document on http://localhost:8100
