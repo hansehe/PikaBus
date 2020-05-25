@@ -1,6 +1,7 @@
 import unittest
 import time
 import datetime
+import pika
 import logging
 from tests import TestTools
 from tests.PikaMessageHandler import PikaMessageHandler
@@ -59,8 +60,9 @@ class TestPikaBus(unittest.TestCase):
         errorTasks = pikaBusErrorSetup.StartAsync()
         try:
             bus = pikaBusSetup.CreateBus()
-            busSeparateChannel = pikaBusSetup.CreateBus(createNewConnection=True)
-            busSeparateChannel.Send(payload=sentOutsideTransactionPayload)
+            reusedConnection = pika.BlockingConnection(TestTools.GetDefaultConnectionParams())
+            busReuseConnection = pikaBusSetup.CreateBus(connection=reusedConnection)
+            busReuseConnection.Send(payload=sentOutsideTransactionPayload)
             busCreatedBeforeStart.Publish(topic=topic, payload=sentOutsideTransactionPayload, mandatory=False)
             bus.Subscribe(topic)
             bus.Subscribe([topic, topic])

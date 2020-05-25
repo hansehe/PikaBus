@@ -95,13 +95,11 @@ class AbstractPikaBusSetup(abc.ABC):
     @abc.abstractmethod
     def CreateBus(self,
                   listenerQueue: str = None,
-                  connectionId: str = None,
-                  createNewConnection: bool = False):
+                  connection=None):
         """
         Create bus with separate channel.
         :param str listenerQueue: Optional listener queue to override default listener queue.
-        :param str connectionId: Optional connection id to reuse an open connection. Get open connections with self.connections.
-        :param bool createNewConnection: Optionally create a new connection instead of reusing an existing connection.
+        :param pika.adapters.blocking_connection connection: Optional connection to reuse an open connection. Get open connections with self.connections.
         :rtype: PikaBus.abstractions.AbstractPikaBus.AbstractPikaBus
         """
         pass

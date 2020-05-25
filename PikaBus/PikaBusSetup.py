@@ -189,19 +189,12 @@ class PikaBusSetup(AbstractPikaBusSetup):
 
     def CreateBus(self,
                   listenerQueue: str = None,
-                  connectionId: str = None,
-                  createNewConnection: bool = False):
+                  connection: pika.adapters.blocking_connection = None):
 
-        openConnections = self.connections
-        if connectionId is None and len(openConnections) > 0:
-            connectionId = random.choice(list(openConnections.keys()))
-
-        if connectionId is None or createNewConnection:
+        closeConnectionOnDelete = False
+        if connection is None:
             closeConnectionOnDelete = True
             connection = pika.BlockingConnection(self._connParams)
-        else:
-            closeConnectionOnDelete = False
-            connection = openConnections[connectionId]
 
         channel = connection.channel()
         if self._confirmDelivery:
