@@ -36,6 +36,14 @@ class PikaBus(AbstractPikaBus):
         if self._closeConnectionOnDelete:
             PikaTools.SafeCloseConnection(self._connection)
 
+    @property
+    def connection(self):
+        return self._connection
+
+    @property
+    def channel(self):
+        return self._channel
+
     def Send(self, payload: dict,
              queue: str = None,
              headers: dict = {},

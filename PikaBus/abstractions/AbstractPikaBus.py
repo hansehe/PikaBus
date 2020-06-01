@@ -3,6 +3,24 @@ import datetime
 
 
 class AbstractPikaBus(abc.ABC):
+    @property
+    @abc.abstractmethod
+    def connection(self):
+        """
+        returns connection.
+        :rtype: pika.adapters.blocking_connection
+        """
+        pass
+
+    @property
+    @abc.abstractmethod
+    def channel(self):
+        """
+        returns channel.
+        :rtype: pika.adapters.blocking_connection.BlockingChannel
+        """
+        pass
+
     @abc.abstractmethod
     def Send(self, payload: dict,
              queue: str = None,
