@@ -10,7 +10,7 @@ with open(os.path.join(here, 'README.rst'), encoding='utf-8') as f:
 with open('requirements.txt') as f:
     reqLines = f.readlines()
 REQUIREMENTS = [reqLine.replace('\r', '').replace('\n', '') for reqLine in reqLines]
-VERSION = '1.2.7'
+VERSION = '1.2.8'
 
 PACKAGE_NAME = 'PikaBus'
 setup(
@@ -39,8 +39,6 @@ setup(
         'Operating System :: Microsoft',
 
         'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.4',
-        'Programming Language :: Python :: 3.5',
         'Programming Language :: Python :: 3.6',
         'Programming Language :: Python :: 3.7',
         'Programming Language :: Python :: 3.8',

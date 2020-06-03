@@ -1,3 +1,5 @@
+from typing import Union, List
+
 import pika
 import pika.exceptions
 import time
@@ -94,7 +96,7 @@ def BasicPublish(channel: pika.adapters.blocking_connection.BlockingChannel,
 
 
 def BasicSubscribe(channel: pika.adapters.blocking_connection.BlockingChannel,
-                   exchange: str, topic: str, queue: str,
+                   exchange: str, topic: Union[List[str], str], queue: str,
                    arguments: dict = None):
     if isinstance(topic, list):
         topics = topic
@@ -108,7 +110,7 @@ def BasicSubscribe(channel: pika.adapters.blocking_connection.BlockingChannel,
 
 
 def BasicUnsubscribe(channel: pika.adapters.blocking_connection.BlockingChannel,
-                     exchange: str, topic: str, queue: str,
+                     exchange: str, topic: Union[List[str], str], queue: str,
                      arguments: dict = None):
     if isinstance(topic, list):
         topics = topic

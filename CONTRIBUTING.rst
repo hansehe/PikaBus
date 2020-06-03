@@ -66,3 +66,10 @@ Do following commands, and locate the document on http://localhost:8100
   cd ./docs/
   pip install -r requirements.txt
   sphinx-autobuild -b html --host 0.0.0.0 --port 8100 ./ ./_build
+
+Or with dbm:
+
+.. code-block:: shell
+
+  dbm -build -run docs
+

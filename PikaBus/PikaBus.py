@@ -1,5 +1,7 @@
 import datetime
 import logging
+from typing import Union, List
+
 import pika
 import pika.exceptions
 from PikaBus.tools import PikaTools, PikaConstants, PikaOutgoing
@@ -35,6 +37,15 @@ class PikaBus(AbstractPikaBus):
             PikaTools.SafeCloseChannel(self._channel)
         if self._closeConnectionOnDelete:
             PikaTools.SafeCloseConnection(self._connection)
+
+    def __enter__(self):
+        self.StartTransaction()
+        return self
+
+    def __exit__(self, excType, value, traceback):
+        if not isinstance(value, BaseException):
+            self.CommitTransaction()
+        self.__del__()
 
     @property
     def connection(self):
@@ -95,7 +106,7 @@ class PikaBus(AbstractPikaBus):
         headers.setdefault(self._pikaProperties.deferredTimeHeaderKey, self._pikaProperties.DatetimeToString(deferredTime))
         self.Send(payload, queue=queue, headers=headers, messageType=messageType, exchange=exchange)
 
-    def Subscribe(self, topic: str,
+    def Subscribe(self, topic: Union[str, List[str]],
                   queue: str = None,
                   exchange: str = None):
         queue = self._SafeGetQueue(queue)
@@ -103,7 +114,7 @@ class PikaBus(AbstractPikaBus):
             exchange = self._topicExchange
         PikaTools.BasicSubscribe(self._channel, exchange, topic, queue)
 
-    def Unsubscribe(self, topic: str,
+    def Unsubscribe(self, topic: Union[str, List[str]],
                     queue: str = None,
                     exchange: str = None):
         queue = self._SafeGetQueue(queue)

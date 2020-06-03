@@ -1,5 +1,6 @@
 import abc
 import datetime
+from typing import Union, List
 
 
 class AbstractPikaBus(abc.ABC):
@@ -82,7 +83,7 @@ class AbstractPikaBus(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def Subscribe(self, topic: str,
+    def Subscribe(self, topic: Union[str, List[str]],
                   queue: str = None,
                   exchange: str = None):
         """
@@ -93,7 +94,7 @@ class AbstractPikaBus(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def Unsubscribe(self, topic: str,
+    def Unsubscribe(self, topic: Union[str, List[str]],
                     queue: str = None,
                     exchange: str = None):
         """

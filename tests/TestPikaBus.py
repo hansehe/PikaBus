@@ -67,11 +67,11 @@ class TestPikaBus(unittest.TestCase):
             bus.Subscribe(topic)
             bus.Subscribe([topic, topic])
             bus.Send(payload=sentOutsideTransactionPayload)
-            bus.StartTransaction()
-            bus.Send(payload=sentPayload)
-            bus.Defer(payload=deferrededPayload, delay=datetime.timedelta(seconds=2))
-            bus.Publish(payload=publisedPayload, topic=topic)
-            bus.CommitTransaction()
+            with pikaBusSetup.CreateBus() as busWithTransaction:
+                busWithTransaction: AbstractPikaBus = busWithTransaction
+                busWithTransaction.Send(payload=sentPayload)
+                busWithTransaction.Defer(payload=deferrededPayload, delay=datetime.timedelta(seconds=2))
+                busWithTransaction.Publish(payload=publisedPayload, topic=topic)
             bus.Send(payload=failingPayload)
             self.assertRaises(Exception, bus.Reply, sentPayload)
         finally:

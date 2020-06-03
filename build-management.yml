@@ -8,6 +8,15 @@ build:
             cmd:
                 - python setup.py bdist_wheel
                 - twine check dist/*
+        docs:
+            files:
+                - docker-compose.docs.yml
+
+run:
+    selections:
+        docs:
+            files:
+                - docker-compose.docs.yml
 
 test:
     selections:

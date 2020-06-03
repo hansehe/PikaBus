@@ -3,7 +3,7 @@ from pika import frame, exceptions
 import asyncio
 import uuid
 import logging
-import random
+from typing import Union, Callable, List
 from concurrent.futures import ThreadPoolExecutor
 import functools
 import retry
@@ -20,7 +20,7 @@ from PikaBus.tools import PikaSteps, PikaConstants, PikaTools
 class PikaBusSetup(AbstractPikaBusSetup):
     def __init__(self, connParams: pika.ConnectionParameters,
                  defaultListenerQueue: str = None,
-                 defaultSubscriptions = [],
+                 defaultSubscriptions: Union[List[str], str] = [],
                  defaultDirectExchange: str = 'PikaBusDirect',
                  defaultTopicExchange: str = 'PikaBusTopic',
                  defaultListenerQueueSettings: dict = {'arguments': {'ha-mode': 'all'}},
@@ -29,7 +29,7 @@ class PikaBusSetup(AbstractPikaBusSetup):
                  pikaSerializer: AbstractPikaSerializer = None,
                  pikaProperties: AbstractPikaProperties = None,
                  pikaErrorHandler: AbstractPikaErrorHandler = None,
-                 pikaBusCreateMethod=None,
+                 pikaBusCreateMethod: Callable = None,
                  retryParams: dict = None,
                  confirmDelivery: bool = True,
                  logger=logging.getLogger(__name__)):
@@ -50,9 +50,6 @@ class PikaBusSetup(AbstractPikaBusSetup):
         :param bool confirmDelivery: Activate confirm delivery with publisher confirms on all channels.
         :param logging logger: Logging object
         """
-        if isinstance(defaultSubscriptions, str):
-            defaultSubscriptions = [defaultSubscriptions]
-
         if pikaSerializer is None:
             pikaSerializer = PikaSerializer.PikaSerializer()
         if pikaProperties is None:
@@ -106,24 +103,48 @@ class PikaBusSetup(AbstractPikaBusSetup):
 
     def Init(self,
              listenerQueue: str = None,
-             listenerQueueSettings: dict = None):
+             listenerQueueSettings: dict = None,
+             topicExchange: str = None,
+             topicExchangeSettings: dict = None,
+             directExchange: str = None,
+             directExchangeSettings: dict = None,
+             subscriptions: Union[List[str], str] = None):
         listenerQueue, listenerQueueSettings = self._GetListenerQueue(listenerQueue, listenerQueueSettings)
-        self._AssertConnection(listenerQueue=listenerQueue,
+        self._AssertConnection(createDefaultRabbitMqSetup=True,
+                               listenerQueue=listenerQueue,
                                listenerQueueSettings=listenerQueueSettings,
-                               createDefaultRabbitMqSetup=True)
+                               topicExchange=topicExchange,
+                               topicExchangeSettings=topicExchangeSettings,
+                               directExchange=directExchange,
+                               directExchangeSettings=directExchangeSettings,
+                               subscriptions=subscriptions)
 
     def Start(self,
               listenerQueue: str = None,
-              listenerQueueSettings: dict = None):
+              listenerQueueSettings: dict = None,
+              topicExchange: str = None,
+              topicExchangeSettings: dict = None,
+              directExchange: str = None,
+              directExchangeSettings: dict = None,
+              subscriptions: Union[List[str], str] = None):
         listenerQueue, listenerQueueSettings = self._AssertListenerQueueIsSet(listenerQueue, listenerQueueSettings)
         with pika.BlockingConnection(self._connParams) as connection:
             channelId = str(uuid.uuid1())
             onMessageCallback = functools.partial(self._OnMessageCallBack,
                                                   connection=connection,
                                                   channelId=channelId,
-                                                  listenerQueue=listenerQueue)
+                                                  listenerQueue=listenerQueue,
+                                                  topicExchange=topicExchange,
+                                                  directExchange=directExchange)
             channel: pika.adapters.blocking_connection.BlockingChannel = connection.channel()
-            self._CreateDefaultRabbitMqSetup(channel, listenerQueue, listenerQueueSettings)
+            self._CreateDefaultRabbitMqSetup(channel,
+                                             listenerQueue,
+                                             listenerQueueSettings,
+                                             topicExchange,
+                                             topicExchangeSettings,
+                                             directExchange,
+                                             directExchangeSettings,
+                                             subscriptions)
             channel.basic_consume(listenerQueue, onMessageCallback)
             self._openChannels[channelId] = channel
             self._openConnections[channelId] = connection
@@ -170,18 +191,34 @@ class PikaBusSetup(AbstractPikaBusSetup):
                    consumers: int = 1,
                    listenerQueue: str = None,
                    listenerQueueSettings: dict = None,
+                   topicExchange: str = None,
+                   topicExchangeSettings: dict = None,
+                   directExchange: str = None,
+                   directExchangeSettings: dict = None,
+                   subscriptions: Union[List[str], str] = None,
                    loop: asyncio.AbstractEventLoop = None,
                    executor: ThreadPoolExecutor = None):
         listenerQueue, listenerQueueSettings = self._AssertListenerQueueIsSet(listenerQueue, listenerQueueSettings)
-        self._AssertConnection(listenerQueue=listenerQueue,
+        self._AssertConnection(createDefaultRabbitMqSetup=True,
+                               listenerQueue=listenerQueue,
                                listenerQueueSettings=listenerQueueSettings,
-                               createDefaultRabbitMqSetup=True)
+                               topicExchange=topicExchange,
+                               topicExchangeSettings=topicExchangeSettings,
+                               directExchange=directExchange,
+                               directExchangeSettings=directExchangeSettings,
+                               subscriptions=subscriptions)
         if loop is None:
             loop = asyncio.get_event_loop()
         tasks = []
         for i in range(consumers):
             func = functools.partial(self._StartConsumerWithRetryHandler,
-                                     listenerQueue=listenerQueue)
+                                     listenerQueue=listenerQueue,
+                                     listenerQueueSettings=listenerQueueSettings,
+                                     topicExchange=topicExchange,
+                                     topicExchangeSettings=topicExchangeSettings,
+                                     directExchange=directExchange,
+                                     directExchangeSettings=directExchangeSettings,
+                                     subscriptions=subscriptions)
             task = loop.run_in_executor(executor, func)
             futureTask = asyncio.ensure_future(task, loop=loop)
             tasks.append(futureTask)
@@ -189,6 +226,8 @@ class PikaBusSetup(AbstractPikaBusSetup):
 
     def CreateBus(self,
                   listenerQueue: str = None,
+                  topicExchange: str = None,
+                  directExchange: str = None,
                   connection: pika.adapters.blocking_connection = None):
 
         closeConnectionOnDelete = False
@@ -201,16 +240,25 @@ class PikaBusSetup(AbstractPikaBusSetup):
             channel.confirm_delivery()
 
         listenerQueue, listenerQueueSettings = self._GetListenerQueue(listenerQueue)
-        data = self._CreateDefaultDataHolder(connection, channel, listenerQueue)
+        data = self._CreateDefaultDataHolder(connection, channel, listenerQueue,
+                                             topicExchange=topicExchange,
+                                             directExchange=directExchange)
         pikaBus: AbstractPikaBus = self._pikaBusCreateMethod(data=data,
                                                              closeChannelOnDelete=True,
                                                              closeConnectionOnDelete=closeConnectionOnDelete)
         return pikaBus
 
-    def AddMessageHandler(self, messageHandler: AbstractPikaMessageHandler):
+    def AddMessageHandler(self, messageHandler: Union[AbstractPikaMessageHandler, Callable]):
         self._messageHandlers.append(messageHandler)
 
-    def _StartConsumerWithRetryHandler(self, listenerQueue: str):
+    def _StartConsumerWithRetryHandler(self,
+                                       listenerQueue: str,
+                                       listenerQueueSettings: dict,
+                                       topicExchange: str,
+                                       topicExchangeSettings: dict,
+                                       directExchange: str,
+                                       directExchangeSettings: dict,
+                                       subscriptions: Union[List[str], str]):
         tries = self._retryParams.get('tries', -1)
         while tries:
             retry.api.retry_call(self._AssertConnection,
@@ -222,20 +270,39 @@ class PikaBusSetup(AbstractPikaBusSetup):
                                  jitter=self._retryParams.get('jitter', 1),
                                  logger=self._logger)
             try:
-                self.Start(listenerQueue)
+                self.Start(
+                    listenerQueue=listenerQueue,
+                    listenerQueueSettings=listenerQueueSettings,
+                    topicExchange=topicExchange,
+                    topicExchangeSettings=topicExchangeSettings,
+                    directExchange=directExchange,
+                    directExchangeSettings=directExchangeSettings,
+                    subscriptions=subscriptions)
                 return
             except Exception as exception:
                 self._logger.exception(f'{str(type(exception))}: {str(exception)}')
             tries -= 1
 
     def _AssertConnection(self,
+                          createDefaultRabbitMqSetup = False,
                           listenerQueue: str = None,
                           listenerQueueSettings: dict = None,
-                          createDefaultRabbitMqSetup = False):
+                          topicExchange: str = None,
+                          topicExchangeSettings: dict = None,
+                          directExchange: str = None,
+                          directExchangeSettings: dict = None,
+                          subscriptions: Union[List[str], str] = None):
         with pika.BlockingConnection(self._connParams) as connection:
             channel: pika.adapters.blocking_connection.BlockingChannel = connection.channel()
             if createDefaultRabbitMqSetup:
-                self._CreateDefaultRabbitMqSetup(channel, listenerQueue, listenerQueueSettings)
+                self._CreateDefaultRabbitMqSetup(channel,
+                                                 listenerQueue,
+                                                 listenerQueueSettings,
+                                                 topicExchange,
+                                                 topicExchangeSettings,
+                                                 directExchange,
+                                                 directExchangeSettings,
+                                                 subscriptions)
 
     def _CreateDefaultRabbitMqSetup(self,
                                     channel: pika.adapters.blocking_connection.BlockingChannel,
@@ -245,7 +312,7 @@ class PikaBusSetup(AbstractPikaBusSetup):
                                     topicExchangeSettings: dict = None,
                                     directExchange: str = None,
                                     directExchangeSettings: dict = None,
-                                    subscriptions: list = None):
+                                    subscriptions: Union[List[str], str] = None):
         if self._confirmDelivery:
             channel.confirm_delivery()
         if topicExchange is None:
@@ -281,9 +348,13 @@ class PikaBusSetup(AbstractPikaBusSetup):
                            body: bytes,
                            connection: pika.BlockingConnection,
                            channelId: str,
-                           listenerQueue: str):
+                           listenerQueue: str,
+                           topicExchange: str = None,
+                           directExchange: str = None):
         self._logger.debug(f"Received new message on channel {channelId}")
-        data = self._CreateDefaultDataHolder(connection, channel, listenerQueue)
+        data = self._CreateDefaultDataHolder(connection, channel, listenerQueue,
+                                             topicExchange=topicExchange,
+                                             directExchange=directExchange)
         data[PikaConstants.DATA_KEY_MESSAGE_HANDLERS] = list(self.messageHandlers)
         incomingMessage = {
             PikaConstants.DATA_KEY_METHOD_FRAME: methodFrame,
@@ -304,11 +375,17 @@ class PikaBusSetup(AbstractPikaBusSetup):
     def _CreateDefaultDataHolder(self,
                                  connection: pika.BlockingConnection,
                                  channel: pika.adapters.blocking_connection.BlockingChannel,
-                                 listenerQueue: str):
+                                 listenerQueue: str,
+                                 topicExchange: str = None,
+                                 directExchange: str = None):
+        if topicExchange is None:
+            topicExchange = self._defaultTopicExchange
+        if directExchange is None:
+            directExchange = self._defaultDirectExchange
         data = {
             PikaConstants.DATA_KEY_LISTENER_QUEUE: listenerQueue,
-            PikaConstants.DATA_KEY_DIRECT_EXCHANGE: self._defaultDirectExchange,
-            PikaConstants.DATA_KEY_TOPIC_EXCHANGE: self._defaultTopicExchange,
+            PikaConstants.DATA_KEY_DIRECT_EXCHANGE: directExchange,
+            PikaConstants.DATA_KEY_TOPIC_EXCHANGE: topicExchange,
             PikaConstants.DATA_KEY_CONNECTION: connection,
             PikaConstants.DATA_KEY_CHANNEL: channel,
             PikaConstants.DATA_KEY_SERIALIZER: self._pikaSerializer,

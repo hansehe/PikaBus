@@ -21,7 +21,7 @@ def GetDefaultConnectionParams():
     return connParams
 
 
-def GetRandomQueue(prefix = 'test'):
+def GetRandomQueue(prefix: str = 'test'):
     id = str(uuid.uuid1())
     return f'pika-{prefix}-{id}'
 

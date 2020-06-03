@@ -17,7 +17,7 @@ Open RabbitMq admin (user=amqp, password=amqp) at:
 Then, run either of these examples:
 
 Consumer
----------------
+--------
 Following example demonstrates running a simple consumer.
 
 .. literalinclude:: ../Examples/consumer_example.py
@@ -33,16 +33,24 @@ The mandatory received flag is turned on by default, so you will get an exceptio
    :language: python
 
 Send Message
----------------
+------------
 This example demonstrates how to send a message in a `one-to-one` pattern with at least once guarantee.
 An exception will be thrown if the destination queue doesn't exist. 
 
 .. literalinclude:: ../Examples/send_example.py
    :language: python
 
+Transaction Message
+-------------------
+This example demonstrates how to send or publish messages in a transaction.
+The transaction is automatically handled in the `with` statement.
+Basically, all outgoing messages are published at transaction commit.
+
+.. literalinclude:: ../Examples/transaction_example.py
+   :language: python
 
 Error Handling
----------------
+--------------
 By default, `PikaBus` implements error handling by forwarding failed messages to a durable queue named `error` 
 after 5 retry attemps with backoff policy between each attempt.
 Following example demonstrates how it is possible to change the error handler settings, or even replace the error handler.
