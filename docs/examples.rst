@@ -40,8 +40,8 @@ An exception will be thrown if the destination queue doesn't exist.
 .. literalinclude:: ../Examples/send_example.py
    :language: python
 
-Transaction Message
--------------------
+Transaction Handling
+--------------------
 This example demonstrates how to send or publish messages in a transaction.
 The transaction is automatically handled in the `with` statement.
 Basically, all outgoing messages are published at transaction commit.
