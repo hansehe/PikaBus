@@ -25,7 +25,7 @@ class AbstractPikaBus(abc.ABC):
     @abc.abstractmethod
     def Send(self, payload: dict,
              queue: str = None,
-             headers: dict = {},
+             headers: dict = None,
              messageType: str = None,
              exchange: str = None):
         """
@@ -39,7 +39,7 @@ class AbstractPikaBus(abc.ABC):
 
     @abc.abstractmethod
     def Publish(self, payload: dict, topic: str,
-                headers: dict = {},
+                headers: dict = None,
                 messageType: str = None,
                 exchange: str = None,
                 mandatory: bool = True):
@@ -55,7 +55,7 @@ class AbstractPikaBus(abc.ABC):
 
     @abc.abstractmethod
     def Reply(self, payload: dict,
-              headers: dict = {},
+              headers: dict = None,
               messageType: str = None,
               exchange: str = None):
         """
@@ -69,7 +69,7 @@ class AbstractPikaBus(abc.ABC):
     @abc.abstractmethod
     def Defer(self, payload: dict, delay: datetime.timedelta,
               queue: str = None,
-              headers: dict = {},
+              headers: dict = None,
               messageType: str = None,
               exchange: str = None):
         """

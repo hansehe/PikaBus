@@ -7,7 +7,9 @@ import logging
 
 
 def CreateDurableQueue(channel: pika.adapters.blocking_connection.BlockingChannel, queue: str,
-                       settings: dict = {}):
+                       settings: dict = None):
+    if settings is None:
+        settings = {}
     channel.queue_declare(queue,
                           passive=settings.get('passive', False),
                           durable=settings.get('durable', True),
@@ -17,7 +19,9 @@ def CreateDurableQueue(channel: pika.adapters.blocking_connection.BlockingChanne
 
 
 def CreateExchange(channel: pika.adapters.blocking_connection.BlockingChannel, exchange: str,
-                   settings: dict = {}):
+                   settings: dict = None):
+    if settings is None:
+        settings = {}
     channel.exchange_declare(exchange,
                              exchange_type=settings.get('exchange_type', 'direct'),
                              passive=settings.get('passive', False),

@@ -64,7 +64,7 @@ def SendOrPublishOutgoingMessage(data: dict, outgoingMessage: dict):
 
 def AppendOutgoingMessage(data: dict, payload: dict, topicOrQueue: str,
                           intent: str = PikaConstants.INTENT_EVENT,
-                          headers: dict = {},
+                          headers: dict = None,
                           messageType: str = None,
                           exchange: str = None,
                           mandatory: bool = True,
@@ -84,13 +84,15 @@ def AppendOutgoingMessage(data: dict, payload: dict, topicOrQueue: str,
 
 
 def GetOutgoingMessage(data: dict, topicOrQueue: str,
-                       payload: dict = {},
+                       payload: dict = None,
                        intent: str = PikaConstants.INTENT_EVENT,
-                       headers: dict = {},
+                       headers: dict = None,
                        messageType: str = None,
                        exchange: str = None,
                        mandatory: bool = True,
                        exception: Exception = None):
+    if headers is None:
+        headers = {}
     serializer: AbstractPikaSerializer = data[PikaConstants.DATA_KEY_SERIALIZER]
     body, contentType, encoding = serializer.Serialize(data, payload)
     outgoingMessage = {

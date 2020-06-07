@@ -10,7 +10,7 @@ from PikaBus.abstractions.AbstractPikaProperties import AbstractPikaProperties
 class PikaErrorHandler(AbstractPikaErrorHandler):
     def __init__(self,
                  errorQueue = 'error',
-                 errorQueueSettings: dict = {'arguments': {'ha-mode': 'all'}},
+                 errorQueueSettings: dict = None,
                  maxRetries: int = 5,
                  delay: int = 1,
                  backoff: int = 2,
@@ -23,6 +23,8 @@ class PikaErrorHandler(AbstractPikaErrorHandler):
         :param int backoff: Multiplier applied to delay between attempts. 0 is no back off.
         :param logging logger: Logging object
         """
+        if errorQueueSettings is None:
+            errorQueueSettings = {'arguments': {'ha-mode': 'all'}}
         self._errorQueue = errorQueue
         self._errorQueueSettings = errorQueueSettings
         self._maxRetries = maxRetries

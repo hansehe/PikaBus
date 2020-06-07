@@ -16,6 +16,8 @@ class PikaSerializer(AbstractPikaSerializer):
         self._logger = logger
 
     def Serialize(self, data: dict, payload: dict):
+        if payload is None:
+            payload = {}
         return json.dumps(payload).encode(self._contentEncoding), self._defaultContentType, self._contentEncoding
 
     def Deserialize(self, data: dict, body: bytes):

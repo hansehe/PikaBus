@@ -20,12 +20,12 @@ from PikaBus.tools import PikaSteps, PikaConstants, PikaTools
 class PikaBusSetup(AbstractPikaBusSetup):
     def __init__(self, connParams: pika.ConnectionParameters,
                  defaultListenerQueue: str = None,
-                 defaultSubscriptions: Union[List[str], str] = [],
+                 defaultSubscriptions: Union[List[str], str] = None,
                  defaultDirectExchange: str = 'PikaBusDirect',
                  defaultTopicExchange: str = 'PikaBusTopic',
-                 defaultListenerQueueSettings: dict = {'arguments': {'ha-mode': 'all'}},
-                 defaultDirectExchangeSettings: dict = {'exchange_type': 'direct'},
-                 defaultTopicExchangeSettings: dict = {'exchange_type': 'topic'},
+                 defaultListenerQueueSettings: dict = None,
+                 defaultDirectExchangeSettings: dict = None,
+                 defaultTopicExchangeSettings: dict = None,
                  pikaSerializer: AbstractPikaSerializer = None,
                  pikaProperties: AbstractPikaProperties = None,
                  pikaErrorHandler: AbstractPikaErrorHandler = None,
@@ -50,6 +50,14 @@ class PikaBusSetup(AbstractPikaBusSetup):
         :param bool confirmDelivery: Activate confirm delivery with publisher confirms on all channels.
         :param logging logger: Logging object
         """
+        if defaultSubscriptions is None:
+            defaultSubscriptions = []
+        if defaultListenerQueueSettings is None:
+            defaultListenerQueueSettings = {'arguments': {'ha-mode': 'all'}}
+        if defaultDirectExchangeSettings is None:
+            defaultDirectExchangeSettings = {'exchange_type': 'direct'}
+        if defaultTopicExchangeSettings is None:
+            defaultTopicExchangeSettings = {'exchange_type': 'topic'}
         if pikaSerializer is None:
             pikaSerializer = PikaSerializer.PikaSerializer()
         if pikaProperties is None:
