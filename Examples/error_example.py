@@ -7,7 +7,7 @@ from PikaBus.PikaErrorHandler import PikaErrorHandler
 
 def failingMessageHandlerMethod(**kwargs):
     """
-    This message handler fails every time for sume dumb reason ..
+    This message handler fails every time for some dumb reason ..
     """
     data: dict = kwargs['data']
     bus: AbstractPikaBus = kwargs['bus']
