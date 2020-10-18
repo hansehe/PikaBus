@@ -32,6 +32,8 @@ class PikaBusSetup(AbstractPikaBusSetup):
                  pikaBusCreateMethod: Callable = None,
                  retryParams: dict = None,
                  confirmDelivery: bool = True,
+                 prefetchSize: int = 0,
+                 prefetchCount: int = 0,
                  logger=logging.getLogger(__name__)):
         """
         :param pika.ConnectionParameters connParams: Pika connection parameters.
@@ -48,6 +50,8 @@ class PikaBusSetup(AbstractPikaBusSetup):
         :param def pikaBusCreateMethod: Optional pikaBus creator method which returns an instance of AbstractPikaBus.
         :param dict retryParams: A set of retry parameters. See options below in code.
         :param bool confirmDelivery: Activate confirm delivery with publisher confirms on all channels.
+        :param bool prefetchSize: Specify the prefetch window size for each channel. 0 means it is deactivated.
+        :param bool prefetchCount: Specify the prefetch count for each channel. 0 means it is deactivated.
         :param logging logger: Logging object
         """
         if defaultSubscriptions is None:
@@ -88,6 +92,8 @@ class PikaBusSetup(AbstractPikaBusSetup):
         self._pikaBusCreateMethod = pikaBusCreateMethod
         self._retryParams = retryParams
         self._confirmDelivery = confirmDelivery
+        self._prefetchSize = prefetchSize
+        self._prefetchCount = prefetchCount
         self._logger = logger
 
     def __del__(self):
@@ -153,6 +159,7 @@ class PikaBusSetup(AbstractPikaBusSetup):
                                              directExchange,
                                              directExchangeSettings,
                                              subscriptions)
+            channel.basic_qos(prefetch_size=self._prefetchSize, prefetch_count=self._prefetchCount)
             channel.basic_consume(listenerQueue, onMessageCallback)
             self._openChannels[channelId] = channel
             self._openConnections[channelId] = connection
