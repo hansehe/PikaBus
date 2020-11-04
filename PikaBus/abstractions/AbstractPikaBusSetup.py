@@ -146,3 +146,14 @@ class AbstractPikaBusSetup(abc.ABC):
         :param AbstractPikaMessageHandler | def messageHandler: An abstract message handler class or a method with `**kwargs` input.
         """
         pass
+
+    @abc.abstractmethod
+    def StopConsumers(self,
+                      consumingTasks: List[asyncio.Future] = None,
+                      loop: asyncio.AbstractEventLoop = None):
+
+        """
+        :param List[asyncio.Future] consumingTasks: List of asyncio consuming tasks returned when calling StartAsync(..).
+        :param asyncio.AbstractEventLoop loop: Event loop. Defaults to current event loop if None.
+        """
+        pass

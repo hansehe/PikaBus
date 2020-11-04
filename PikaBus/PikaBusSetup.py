@@ -7,6 +7,7 @@ from typing import Union, Callable, List
 from concurrent.futures import ThreadPoolExecutor
 import functools
 import retry
+import atexit
 from PikaBus.abstractions.AbstractPikaBusSetup import AbstractPikaBusSetup
 from PikaBus.abstractions.AbstractPikaSerializer import AbstractPikaSerializer
 from PikaBus.abstractions.AbstractPikaProperties import AbstractPikaProperties
@@ -34,6 +35,7 @@ class PikaBusSetup(AbstractPikaBusSetup):
                  confirmDelivery: bool = True,
                  prefetchSize: int = 0,
                  prefetchCount: int = 0,
+                 registerStopConsumersMethodAtExit: bool = True,
                  logger=logging.getLogger(__name__)):
         """
         :param pika.ConnectionParameters connParams: Pika connection parameters.
@@ -52,6 +54,7 @@ class PikaBusSetup(AbstractPikaBusSetup):
         :param bool confirmDelivery: Activate confirm delivery with publisher confirms on all channels.
         :param bool prefetchSize: Specify the prefetch window size for each channel. 0 means it is deactivated.
         :param bool prefetchCount: Specify the prefetch count for each channel. 0 means it is deactivated.
+        :param bool registerStopConsumersMethodAtExit: Automatically stop all consumers when application stops.
         :param logging logger: Logging object
         """
         if defaultSubscriptions is None:
@@ -94,7 +97,11 @@ class PikaBusSetup(AbstractPikaBusSetup):
         self._confirmDelivery = confirmDelivery
         self._prefetchSize = prefetchSize
         self._prefetchCount = prefetchCount
+        self._allConsumingTasks = []
         self._logger = logger
+
+        if registerStopConsumersMethodAtExit:
+            atexit.register(self.StopConsumers)
 
     def __del__(self):
         self.Stop()
@@ -237,6 +244,9 @@ class PikaBusSetup(AbstractPikaBusSetup):
             task = loop.run_in_executor(executor, func)
             futureTask = asyncio.ensure_future(task, loop=loop)
             tasks.append(futureTask)
+
+        self._allConsumingTasks += tasks
+
         return tasks
 
     def CreateBus(self,
@@ -265,6 +275,16 @@ class PikaBusSetup(AbstractPikaBusSetup):
 
     def AddMessageHandler(self, messageHandler: Union[AbstractPikaMessageHandler, Callable]):
         self._messageHandlers.append(messageHandler)
+
+    def StopConsumers(self,
+                      consumingTasks: List[asyncio.Future] = None,
+                      loop: asyncio.AbstractEventLoop = None):
+        self.Stop()
+        if consumingTasks is None:
+            consumingTasks = self._allConsumingTasks
+        if loop is None:
+            loop = asyncio.get_event_loop()
+        return loop.run_until_complete(asyncio.gather(*consumingTasks))
 
     def _StartConsumerWithRetryHandler(self,
                                        listenerQueue: str,

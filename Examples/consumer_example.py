@@ -1,4 +1,3 @@
-import asyncio
 import pika
 from PikaBus.abstractions.AbstractPikaBus import AbstractPikaBus
 from PikaBus.PikaBusSetup import PikaBusSetup
@@ -33,11 +32,7 @@ pikaBusSetup = PikaBusSetup(connParams,
 pikaBusSetup.AddMessageHandler(MessageHandlerMethod)
 
 # Start consuming messages from the queue.
-consumingTasks = pikaBusSetup.StartAsync()
+pikaBusSetup.StartAsync()
 
 input('Hit enter to stop all consuming channels \n\n')
-pikaBusSetup.Stop()
-
-# Wait for the consuming tasks to complete safely.
-loop = asyncio.get_event_loop()
-loop.run_until_complete(asyncio.gather(*consumingTasks))
+pikaBusSetup.StopConsumers()

@@ -76,8 +76,8 @@ class TestPikaBus(unittest.TestCase):
             self.assertRaises(Exception, bus.Reply, sentPayload)
         finally:
             time.sleep(5)
-            pikaBusSetup.Stop()
-            pikaBusErrorSetup.Stop()
+            pikaBusSetup.StopConsumers()
+            pikaBusErrorSetup.StopConsumers()
             TestTools.CompleteTask(tasks + errorTasks)
         sentOutsideTransactionPayloadId = sentOutsideTransactionPayload['id']
         sentPayloadId = sentPayload['id']

@@ -1,4 +1,3 @@
-import asyncio
 import pika
 from PikaBus.abstractions.AbstractPikaBus import AbstractPikaBus
 from PikaBus.PikaBusSetup import PikaBusSetup
@@ -32,7 +31,7 @@ pikaBusSetup = PikaBusSetup(connParams,
 pikaBusSetup.AddMessageHandler(failingMessageHandlerMethod)
 
 # Start consuming messages from the queue.
-consumingTasks = pikaBusSetup.StartAsync()
+pikaBusSetup.StartAsync()
 
 # Create a temporary bus to subscribe on topics and send, defer or publish messages.
 bus = pikaBusSetup.CreateBus()
@@ -44,8 +43,4 @@ payload = {'hello': 'world!', 'reply': True}
 bus.Send(payload=payload, queue='myFailingQueue')
 
 input('Hit enter to stop all consuming channels \n\n')
-pikaBusSetup.Stop()
-
-# Wait for the consuming tasks to complete safely.
-loop = asyncio.get_event_loop()
-loop.run_until_complete(asyncio.gather(*consumingTasks))
+pikaBusSetup.StopConsumers()
