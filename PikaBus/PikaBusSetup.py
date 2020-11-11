@@ -164,14 +164,6 @@ class PikaBusSetup(AbstractPikaBusSetup):
             channelId = str(uuid.uuid1())
             self._channelTimestamps[channelId] = time.time()
             channel: pika.adapters.blocking_connection.BlockingChannel = connection.channel()
-            heartbeatFunc = functools.partial(self._ConnectionHeartbeat,
-                                              connection=connection,
-                                              channel=channel,
-                                              listenerQueue=listenerQueue,
-                                              channelId=channelId)
-            connectionHeartbeatTask = loop.run_in_executor(executor, heartbeatFunc)
-            futureConnectionHeartbeatTask = asyncio.ensure_future(connectionHeartbeatTask, loop=loop)
-            self._allConsumingTasks += [futureConnectionHeartbeatTask]
             onMessageCallback = functools.partial(self._OnMessageCallBack,
                                                   connection=connection,
                                                   channelId=channelId,
@@ -192,6 +184,14 @@ class PikaBusSetup(AbstractPikaBusSetup):
             self._openConnections[channelId] = connection
             self._logger.info(f'Starting new consumer channel with id {channelId} '
                               f'and {len(self.channels)} ongoing channels.')
+            heartbeatFunc = functools.partial(self._ConnectionHeartbeat,
+                                              connection=connection,
+                                              channel=channel,
+                                              listenerQueue=listenerQueue,
+                                              channelId=channelId)
+            connectionHeartbeatTask = loop.run_in_executor(executor, heartbeatFunc)
+            futureConnectionHeartbeatTask = asyncio.ensure_future(connectionHeartbeatTask, loop=loop)
+            self._allConsumingTasks += [futureConnectionHeartbeatTask]
             try:
                 channel.start_consuming()
             except Exception as exception:
@@ -214,7 +214,9 @@ class PikaBusSetup(AbstractPikaBusSetup):
                               topicExchangeSettings,
                               directExchange,
                               directExchangeSettings,
-                              subscriptions)
+                              subscriptions,
+                              loop,
+                              executor)
         self._logger.info(f'Closing consumer channel with id {channelId}.')
 
     def Stop(self,
@@ -499,7 +501,11 @@ class PikaBusSetup(AbstractPikaBusSetup):
         heartbeatInterval = math.ceil((self._connParams.heartbeat if self._connParams.heartbeat is not None else 60) / 4)
         nextHeartbeat = time.time() + heartbeatInterval
         while connection.is_open:
-            queueMessagesCount = self._GetQueueMessagesCount(channel, listenerQueue)
+            try:
+                queueMessagesCount = self._GetQueueMessagesCount(channel, listenerQueue)
+            except Exception as error:
+                self._logger.exception(f'Channel is closed - failed fetching queue message count with channel {channelId}: {str(error)}')
+                break
             lastReceivedMessageTimeout = time.time() - self._channelTimestamps[channelId]
             if queueMessagesCount > 0 and 0 < self._connectionDeadTimeout < lastReceivedMessageTimeout:
                 self._logger.debug(f'Force closing channel {channelId} due to timeout.')
