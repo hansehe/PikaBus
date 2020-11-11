@@ -59,7 +59,7 @@ class PikaBusSetup(AbstractPikaBusSetup):
         :param int prefetchSize: Specify the prefetch window size for each channel. 0 means it is deactivated.
         :param int prefetchCount: Specify the prefetch count for each channel. 0 means it is deactivated.
         :param bool registerStopConsumersMethodAtExit: Automatically stop all consumers when application stops.
-        :param int connectionDeadTimeout: Specify connection dead timeout. 0 means it is deactivated.
+        :param int connectionDeadTimeout: Specify connection dead timeout in seconds. 0 means it is deactivated.
         :param logging logger: Logging object
         """
         if defaultSubscriptions is None:
@@ -203,20 +203,10 @@ class PikaBusSetup(AbstractPikaBusSetup):
             finally:
                 self._openChannels.pop(channelId)
                 self._openConnections.pop(channelId)
-                restartConsumer = True
                 if channelId in self._forceCloseChannelIds:
                     self._forceCloseChannelIds.pop(channelId)
-                    restartConsumer = False
-        if restartConsumer:
-            return self.Start(listenerQueue,
-                              listenerQueueSettings,
-                              topicExchange,
-                              topicExchangeSettings,
-                              directExchange,
-                              directExchangeSettings,
-                              subscriptions,
-                              loop,
-                              executor)
+                else:
+                    raise Exception(f'Channel {channelId} stopped unexpectedly.')
         self._logger.info(f'Closing consumer channel with id {channelId}.')
 
     def Stop(self,
@@ -229,16 +219,17 @@ class PikaBusSetup(AbstractPikaBusSetup):
                 self.Stop(channelId=openChannelId,
                           forceCloseChannel=forceCloseChannel)
         else:
-            channel: pika.adapters.blocking_connection.BlockingChannel = openChannels[channelId]
-            if channel.is_open:
+            channel: pika.adapters.blocking_connection.BlockingChannel = openChannels.get(channelId, None)
+            if channel is not None and channel.is_open:
                 if forceCloseChannel:
                     self._forceCloseChannelIds[channelId] = channel
                 try:
                     channel.stop_consuming()
                 except Exception as exception:
                     self._logger.exception(f'Ignoring - {str(exception)}')
-                    connection: pika.BlockingConnection = openConnections[channelId]
-                    PikaTools.SafeCloseConnection(connection)
+                    connection: pika.BlockingConnection = openConnections.get(channelId, None)
+                    if connection is not None:
+                        PikaTools.SafeCloseConnection(connection)
 
     def StartAsync(self,
                    consumers: int = 1,
@@ -500,14 +491,14 @@ class PikaBusSetup(AbstractPikaBusSetup):
                              channelId: str):
         heartbeatInterval = math.ceil((self._connParams.heartbeat if self._connParams.heartbeat is not None else 60) / 4)
         nextHeartbeat = time.time() + heartbeatInterval
-        while channelId in self._openChannels:
+        while channelId in self.channels:
             try:
                 queueMessagesCount = self._GetQueueMessagesCount(channel, listenerQueue)
             except Exception as error:
                 self._logger.exception(f'Failed fetching queue message count with channel {channelId}: {str(error)}')
-                queueMessagesCount = 0
+                queueMessagesCount = -1
             lastReceivedMessageTimeout = time.time() - self._channelTimestamps[channelId]
-            if queueMessagesCount > 0 and 0 < self._connectionDeadTimeout < lastReceivedMessageTimeout:
+            if queueMessagesCount != 0 and 0 < self._connectionDeadTimeout < lastReceivedMessageTimeout:
                 self._logger.debug(f'Force closing channel {channelId} due to timeout.')
                 self.Stop(channelId, forceCloseChannel=False)
                 self._channelTimestamps.pop(channelId)
@@ -520,8 +511,11 @@ class PikaBusSetup(AbstractPikaBusSetup):
                     self._logger.exception(f'Heartbeat failure with channel {channelId}: {str(error)}')
                 nextHeartbeat = time.time() + heartbeatInterval
             time.sleep(min(heartbeatInterval, 10))
+        self._logger.debug(f'Stopped heartbeat task for channel {channelId}.')
 
-    def _GetQueueMessagesCount(self, channel: pika.adapters.blocking_connection.BlockingChannel, queue: str) -> int:
+    def _GetQueueMessagesCount(self, channel: pika.adapters.blocking_connection.BlockingChannel, queue: str):
+        if channel.is_closed:
+            return -1
         queue = channel.queue_declare(queue=queue, passive=True)
         messagesCount = queue.method.message_count
         return messagesCount

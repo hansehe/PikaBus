@@ -35,7 +35,12 @@ def GetPikaBusSetup(listenerQueue: str = None, connParams: pika.ConnectionParame
     if connParams is None:
         connParams = GetDefaultConnectionParams()
     pikaErrorHandler = PikaErrorHandler.PikaErrorHandler(errorQueue=errorQueue, maxRetries=1)
-    return PikaBusSetup.PikaBusSetup(connParams, defaultListenerQueue=listenerQueue, defaultSubscriptions=topics, pikaErrorHandler=pikaErrorHandler)
+    return PikaBusSetup.PikaBusSetup(connParams,
+                                     defaultListenerQueue=listenerQueue,
+                                     defaultSubscriptions=topics,
+                                     pikaErrorHandler=pikaErrorHandler,
+                                     retryParams={'tries': 3},
+                                     connectionDeadTimeout=10)
 
 
 def GetPayload(id = None, failing = False, reply = False, topic = ''):
