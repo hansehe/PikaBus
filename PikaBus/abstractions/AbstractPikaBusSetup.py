@@ -93,10 +93,12 @@ class AbstractPikaBusSetup(abc.ABC):
 
     @abc.abstractmethod
     def Stop(self,
-             channelId: str = None):
+             channelId: str = None,
+             forceCloseChannel: bool = True):
         """
         Stop blocking bus consumer channel.
         :param str channelId: Optional channel id. Get open channels with self.channels.
+        :param bool forceCloseChannel: Optionally force close channel. Default is True.
         """
         pass
 
