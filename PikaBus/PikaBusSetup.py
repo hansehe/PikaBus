@@ -507,7 +507,7 @@ class PikaBusSetup(AbstractPikaBusSetup):
                 self._logger.exception(f'Failed fetching queue message count with channel {channelId}: {str(error)}')
                 queueMessagesCount = 0
             lastReceivedMessageTimeout = time.time() - self._channelTimestamps[channelId]
-            if queueMessagesCount == 0 and 0 < self._connectionDeadTimeout < lastReceivedMessageTimeout:
+            if queueMessagesCount > 0 and 0 < self._connectionDeadTimeout < lastReceivedMessageTimeout:
                 self._logger.debug(f'Force closing channel {channelId} due to timeout.')
                 self.Stop(channelId, forceCloseChannel=False)
                 self._channelTimestamps.pop(channelId)
