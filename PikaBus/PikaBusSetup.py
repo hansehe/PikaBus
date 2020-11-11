@@ -1,5 +1,8 @@
+import math
+import time
+
 import pika
-from pika import frame, exceptions
+from pika import frame
 import asyncio
 import uuid
 import logging
@@ -147,9 +150,18 @@ class PikaBusSetup(AbstractPikaBusSetup):
               topicExchangeSettings: dict = None,
               directExchange: str = None,
               directExchangeSettings: dict = None,
-              subscriptions: Union[List[str], str] = None):
+              subscriptions: Union[List[str], str] = None,
+              loop: asyncio.AbstractEventLoop = None,
+              executor: ThreadPoolExecutor = None):
+        if loop is None:
+            loop = asyncio.get_event_loop()
         listenerQueue, listenerQueueSettings = self._AssertListenerQueueIsSet(listenerQueue, listenerQueueSettings)
         with pika.BlockingConnection(self._connParams) as connection:
+            heartbeatFunc = functools.partial(self._ConnectionHeartbeat,
+                                              connection=connection)
+            connectionHeartbeatTask = loop.run_in_executor(executor, heartbeatFunc)
+            futureConnectionHeartbeatTask = asyncio.ensure_future(connectionHeartbeatTask, loop=loop)
+            self._allConsumingTasks += [futureConnectionHeartbeatTask]
             channelId = str(uuid.uuid1())
             onMessageCallback = functools.partial(self._OnMessageCallBack,
                                                   connection=connection,
@@ -246,7 +258,9 @@ class PikaBusSetup(AbstractPikaBusSetup):
                                      topicExchangeSettings=topicExchangeSettings,
                                      directExchange=directExchange,
                                      directExchangeSettings=directExchangeSettings,
-                                     subscriptions=subscriptions)
+                                     subscriptions=subscriptions,
+                                     loop=loop,
+                                     executor=executor)
             task = loop.run_in_executor(executor, func)
             futureTask = asyncio.ensure_future(task, loop=loop)
             tasks.append(futureTask)
@@ -299,7 +313,9 @@ class PikaBusSetup(AbstractPikaBusSetup):
                                        topicExchangeSettings: dict,
                                        directExchange: str,
                                        directExchangeSettings: dict,
-                                       subscriptions: Union[List[str], str]):
+                                       subscriptions: Union[List[str], str],
+                                       loop: asyncio.AbstractEventLoop = None,
+                                       executor: ThreadPoolExecutor = None):
         tries = self._retryParams.get('tries', -1)
         while tries:
             retry.api.retry_call(self._AssertConnection,
@@ -311,14 +327,15 @@ class PikaBusSetup(AbstractPikaBusSetup):
                                  jitter=self._retryParams.get('jitter', 1),
                                  logger=self._logger)
             try:
-                self.Start(
-                    listenerQueue=listenerQueue,
-                    listenerQueueSettings=listenerQueueSettings,
-                    topicExchange=topicExchange,
-                    topicExchangeSettings=topicExchangeSettings,
-                    directExchange=directExchange,
-                    directExchangeSettings=directExchangeSettings,
-                    subscriptions=subscriptions)
+                self.Start(listenerQueue=listenerQueue,
+                           listenerQueueSettings=listenerQueueSettings,
+                           topicExchange=topicExchange,
+                           topicExchangeSettings=topicExchangeSettings,
+                           directExchange=directExchange,
+                           directExchangeSettings=directExchangeSettings,
+                           subscriptions=subscriptions,
+                           loop=loop,
+                           executor=executor)
                 return
             except Exception as exception:
                 self._logger.exception(f'{str(type(exception))}: {str(exception)}')
@@ -461,3 +478,13 @@ class PikaBusSetup(AbstractPikaBusSetup):
         return PikaBus.PikaBus(data=data,
                                closeChannelOnDelete=closeChannelOnDelete,
                                closeConnectionOnDelete=closeConnectionOnDelete)
+
+    def _ConnectionHeartbeat(self, connection: pika.BlockingConnection):
+        heartbeatInterval = math.ceil((self._connParams.heartbeat if self._connParams.heartbeat is not None else 60) / 4)
+        nextHeartbeat = time.time() + heartbeatInterval
+        while connection.is_open:
+            if time.time() > nextHeartbeat:
+                connection.process_data_events()
+                self._logger.debug('Connection heartbeat triggered')
+                nextHeartbeat = time.time() + heartbeatInterval
+            time.sleep(min(heartbeatInterval, 10))

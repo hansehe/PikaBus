@@ -74,7 +74,9 @@ class AbstractPikaBusSetup(abc.ABC):
               topicExchangeSettings: dict = None,
               directExchange: str = None,
               directExchangeSettings: dict = None,
-              subscriptions: Union[List[str], str] = None):
+              subscriptions: Union[List[str], str] = None,
+              loop: asyncio.AbstractEventLoop = None,
+              executor: concurrent.futures.ThreadPoolExecutor = None):
         """
         :param str listenerQueue: Optional listener queue to override default listener queue.
         :param dict listenerQueueSettings: Optional listener queue settings.
@@ -83,6 +85,8 @@ class AbstractPikaBusSetup(abc.ABC):
         :param str directExchange: Optional direct exchange to override default direct exchange.
         :param dict directExchangeSettings: Optional direct exchange settings.
         :param [str] | str subscriptions: Optional topic or a list of topics to subscribe, overriding default topic subscriptions.
+        :param asyncio.AbstractEventLoop loop: Event loop. Defaults to current event loop if None.
+        :param executor: concurrent.futures.ThreadPoolExecutor executor: Executor. Defaults to current executor if None.
         Start blocking bus consumer channel.
         """
         pass
