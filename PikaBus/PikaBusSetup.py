@@ -222,13 +222,16 @@ class PikaBusSetup(AbstractPikaBusSetup):
             channel: pika.adapters.blocking_connection.BlockingChannel = openChannels.get(channelId, None)
             if channel is not None and channel.is_open:
                 if forceCloseChannel:
+                    self._logger.debug(f'Force closing channel {channelId}')
                     self._forceCloseChannelIds[channelId] = channel
+                self._logger.debug(f'Stopping consumer channel {channelId}')
                 try:
                     channel.stop_consuming()
                 except Exception as exception:
-                    self._logger.exception(f'Ignoring - {str(exception)}')
+                    self._logger.exception(f'Failed stopping consumer channel {channelId} - Ignoring - {str(exception)}')
                     connection: pika.BlockingConnection = openConnections.get(channelId, None)
                     if connection is not None:
+                        self._logger.debug(f'Closing connection with channel {channelId}')
                         PikaTools.SafeCloseConnection(connection)
 
     def StartAsync(self,
@@ -322,6 +325,7 @@ class PikaBusSetup(AbstractPikaBusSetup):
                                        executor: ThreadPoolExecutor = None):
         tries = self._retryParams.get('tries', -1)
         while tries:
+            self._logger.debug(f'Starting async consumer with {tries} tries (-1 = infinite) left')
             retry.api.retry_call(self._AssertConnection,
                                  exceptions=Exception,
                                  tries=tries,
@@ -340,13 +344,14 @@ class PikaBusSetup(AbstractPikaBusSetup):
                            subscriptions=subscriptions,
                            loop=loop,
                            executor=executor)
+                self._logger.debug(f'Safely stopped async consumer')
                 return
             except Exception as exception:
-                self._logger.exception(f'{str(type(exception))}: {str(exception)}')
+                self._logger.exception(f'Failed async consumer: {str(exception)}')
             tries -= 1
 
     def _AssertConnection(self,
-                          createDefaultRabbitMqSetup = False,
+                          createDefaultRabbitMqSetup=False,
                           listenerQueue: str = None,
                           listenerQueueSettings: dict = None,
                           topicExchange: str = None,
@@ -489,29 +494,54 @@ class PikaBusSetup(AbstractPikaBusSetup):
                              channel: pika.adapters.blocking_connection.BlockingChannel,
                              listenerQueue: str,
                              channelId: str):
-        heartbeatInterval = math.ceil((self._connParams.heartbeat if self._connParams.heartbeat is not None else 60) / 4)
-        nextHeartbeat = time.time() + heartbeatInterval
+        nextHeartbeat: int = -1
+        heartbeatInterval: int = -1
         while channelId in self.channels:
-            try:
-                queueMessagesCount = self._GetQueueMessagesCount(channel, listenerQueue)
-            except Exception as error:
-                self._logger.exception(f'Failed fetching queue message count with channel {channelId}: {str(error)}')
-                queueMessagesCount = -1
-            lastReceivedMessageTimeout = time.time() - self._channelTimestamps[channelId]
-            if queueMessagesCount != 0 and 0 < self._connectionDeadTimeout < lastReceivedMessageTimeout:
-                self._logger.debug(f'Force closing channel {channelId} due to timeout.')
-                self.Stop(channelId, forceCloseChannel=False)
-                self._channelTimestamps.pop(channelId)
-                break
-            if lastReceivedMessageTimeout > heartbeatInterval and time.time() > nextHeartbeat:
-                try:
-                    connection.process_data_events()
-                    self._logger.debug(f'Connection heartbeat triggered with channel {channelId}')
-                except Exception as error:
-                    self._logger.exception(f'Heartbeat failure with channel {channelId}: {str(error)}')
-                nextHeartbeat = time.time() + heartbeatInterval
+            heartbeatInterval, nextHeartbeat = self._PushHeartbeat(connection,
+                                                                   channelId,
+                                                                   heartbeatInterval,
+                                                                   nextHeartbeat)
+            self._CheckDeadConnection(channel,
+                                      listenerQueue,
+                                      channelId)
             time.sleep(min(heartbeatInterval, 10))
         self._logger.debug(f'Stopped heartbeat task for channel {channelId}.')
+
+    def _PushHeartbeat(self,
+                       connection: pika.BlockingConnection,
+                       channelId: str,
+                       heartbeatInterval: int = -1,
+                       nextHeartbeat: int = -1):
+        if heartbeatInterval < 0:
+            heartbeatInterval = math.ceil(
+                (self._connParams.heartbeat if self._connParams.heartbeat is not None else 60) / 4)
+        if nextHeartbeat < 0:
+            nextHeartbeat = time.time() + heartbeatInterval
+        if time.time() >= nextHeartbeat:
+            try:
+                connection.process_data_events()
+                self._logger.debug(f'Connection heartbeat triggered with channel {channelId}')
+            except Exception as error:
+                self._logger.exception(f'Heartbeat failure with channel {channelId}: {str(error)}')
+        nextHeartbeat = time.time() + heartbeatInterval
+        return heartbeatInterval, nextHeartbeat
+
+    def _CheckDeadConnection(self,
+                             channel: pika.adapters.blocking_connection.BlockingChannel,
+                             listenerQueue: str,
+                             channelId: str):
+        try:
+            queueMessagesCount = self._GetQueueMessagesCount(channel, listenerQueue)
+        except Exception as error:
+            self._logger.exception(f'Failed fetching queue message count with channel {channelId}: {str(error)}')
+            queueMessagesCount = -1
+        lastReceivedMessageTimeout = time.time() - self._channelTimestamps[channelId]
+        if queueMessagesCount != 0 and 0 < self._connectionDeadTimeout < lastReceivedMessageTimeout:
+            self._logger.debug(f'Force closing channel {channelId} due to timeout.')
+            self.Stop(channelId, forceCloseChannel=False)
+            self._channelTimestamps.pop(channelId)
+            return True
+        return False
 
     def _GetQueueMessagesCount(self, channel: pika.adapters.blocking_connection.BlockingChannel, queue: str):
         if channel.is_closed:
