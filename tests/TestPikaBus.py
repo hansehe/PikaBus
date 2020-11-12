@@ -74,7 +74,7 @@ class TestPikaBus(unittest.TestCase):
                 busWithTransaction.Publish(payload=publisedPayload, topic=topic)
             bus.Send(payload=failingPayload)
             self.assertRaises(Exception, bus.Reply, sentPayload)
-            pikaBusSetup.ConsumerHealthCheck()
+            self.assertTrue(pikaBusSetup.ConsumerHealthCheck())
         finally:
             time.sleep(5)
             pikaBusSetup.StopConsumers()

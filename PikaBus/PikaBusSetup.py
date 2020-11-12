@@ -320,13 +320,15 @@ class PikaBusSetup(AbstractPikaBusSetup):
                             channelId: str = None):
         openChannels = self.channels
         openConnections = dict(self._openConnections)
+        health = True
         if channelId is None:
             for openChannelId in openChannels:
-                self.ConsumerHealthCheck(channelId=openChannelId)
+                health &= self.ConsumerHealthCheck(channelId=openChannelId)
+            return health
         if channelId not in openChannels or \
                 channelId not in openConnections or \
                 channelId not in self._channelListenerQueues:
-            return False
+            return health
         connection = openConnections[channelId]
         channel = openChannels[channelId]
         listenerQueue = self._channelListenerQueues[channelId]
@@ -335,7 +337,8 @@ class PikaBusSetup(AbstractPikaBusSetup):
                                                                                                        listenerQueue=listenerQueue,
                                                                                                        channelId=channelId,
                                                                                                        nextHeartbeat=0)
-        return not connectionWasDead
+        health &= not connectionWasDead
+        return health
 
     def _StartConsumerWithRetryHandler(self,
                                        listenerQueue: str,
