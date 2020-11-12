@@ -340,6 +340,16 @@ class PikaBusSetup(AbstractPikaBusSetup):
         health &= not connectionWasDead
         return health
 
+    def QueueMessagesCount(self,
+                           channel: pika.adapters.blocking_connection.BlockingChannel = None,
+                           queue: str = None):
+        if queue is None:
+            queue = self._defaultListenerQueue
+        if channel is None:
+            with self.CreateBus() as pikabus:
+                return self._GetQueueMessagesCount(pikabus.channel, queue)
+        return self._GetQueueMessagesCount(channel, queue)
+
     def _StartConsumerWithRetryHandler(self,
                                        listenerQueue: str,
                                        listenerQueueSettings: dict,
@@ -580,11 +590,12 @@ class PikaBusSetup(AbstractPikaBusSetup):
         except Exception as error:
             self._logger.exception(f'Failed fetching queue message count with channel {channelId}: {str(error)}')
             queueMessagesCount = -1
-        lastReceivedMessageTimeout = time.time() - self._channelTimestamps[channelId]
+        lastReceivedMessageTimeout = time.time() - self._channelTimestamps.get(channelId, time.time())
         if queueMessagesCount != 0 and 0 < self._connectionDeadTimeout < lastReceivedMessageTimeout:
             self._logger.debug(f'Force closing channel {channelId} due to timeout.')
             self.Stop(channelId, forceCloseChannel=False)
-            self._channelTimestamps.pop(channelId)
+            if channelId in self._channelTimestamps:
+                self._channelTimestamps.pop(channelId)
             return True
         return False
 

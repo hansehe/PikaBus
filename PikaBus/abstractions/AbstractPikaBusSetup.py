@@ -3,6 +3,8 @@ import asyncio
 import concurrent.futures
 from typing import Union, Callable, List
 
+import pika
+
 from PikaBus.abstractions.AbstractPikaMessageHandler import AbstractPikaMessageHandler
 
 
@@ -171,5 +173,16 @@ class AbstractPikaBusSetup(abc.ABC):
         Verify consumer health check and restart consumer if necessary. Run this method on every health check.
         :param str channelId: Optional channel id. Get open channels with self.channels.
         :rtype: bool
+        """
+        pass
+
+    @abc.abstractmethod
+    def QueueMessagesCount(self,
+                           channel: pika.adapters.blocking_connection.BlockingChannel = None,
+                           queue: str = None):
+        """
+        :param pika.adapters.blocking_connection.BlockingChannel channel: Optional channel.
+        :param str queue: Optional queue. Default listener queue is used by default.
+        :rtype: int
         """
         pass
