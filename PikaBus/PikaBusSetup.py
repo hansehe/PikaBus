@@ -517,10 +517,12 @@ class PikaBusSetup(AbstractPikaBusSetup):
                 (self._connParams.heartbeat if self._connParams.heartbeat is not None else 60) / 4)
         if nextHeartbeat < 0:
             nextHeartbeat = time.time() + heartbeatInterval
-        if time.time() >= nextHeartbeat:
+        heartBeatStart = time.time()
+        if heartBeatStart >= nextHeartbeat:
             try:
-                connection.process_data_events()
-                self._logger.debug(f'Connection heartbeat triggered with channel {channelId}')
+                self._logger.debug(f'Triggering connection heartbeat with channel {channelId}')
+                connection.process_data_events(time_limit=heartbeatInterval)
+                self._logger.debug(f'Connection heartbeat triggered with channel {channelId} after {time.time() - heartBeatStart} seconds.')
             except Exception as error:
                 self._logger.exception(f'Heartbeat failure with channel {channelId}: {str(error)}')
         nextHeartbeat = time.time() + heartbeatInterval
