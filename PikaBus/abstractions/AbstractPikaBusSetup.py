@@ -163,3 +163,13 @@ class AbstractPikaBusSetup(abc.ABC):
         :param asyncio.AbstractEventLoop loop: Event loop. Defaults to current event loop if None.
         """
         pass
+
+    @abc.abstractmethod
+    def ConsumerHealthCheck(self,
+                            channelId: str = None):
+        """
+        Verify consumer health check and restart consumer if necessary. Run this method on every health check.
+        :param str channelId: Optional channel id. Get open channels with self.channels.
+        :rtype: bool
+        """
+        pass

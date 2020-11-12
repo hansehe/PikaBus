@@ -105,6 +105,7 @@ class PikaBusSetup(AbstractPikaBusSetup):
         self._connectionDeadTimeout = connectionDeadTimeout
         self._allConsumingTasks = []
         self._channelTimestamps = {}
+        self._channelListenerQueues = {}
         self._logger = logger
 
         if registerStopConsumersMethodAtExit:
@@ -182,6 +183,7 @@ class PikaBusSetup(AbstractPikaBusSetup):
             channel.basic_consume(listenerQueue, onMessageCallback)
             self._openChannels[channelId] = channel
             self._openConnections[channelId] = connection
+            self._channelListenerQueues[channelId] = listenerQueue
             self._logger.info(f'Starting new consumer channel with id {channelId} '
                               f'and {len(self.channels)} ongoing channels.')
             heartbeatFunc = functools.partial(self._ConnectionHeartbeat,
@@ -203,6 +205,7 @@ class PikaBusSetup(AbstractPikaBusSetup):
             finally:
                 self._openChannels.pop(channelId)
                 self._openConnections.pop(channelId)
+                self._channelListenerQueues.pop(channelId)
                 if channelId in self._forceCloseChannelIds:
                     self._forceCloseChannelIds.pop(channelId)
                 else:
@@ -312,6 +315,27 @@ class PikaBusSetup(AbstractPikaBusSetup):
         if loop is None:
             loop = asyncio.get_event_loop()
         return loop.run_until_complete(asyncio.gather(*consumingTasks))
+
+    def ConsumerHealthCheck(self,
+                            channelId: str = None):
+        openChannels = self.channels
+        openConnections = dict(self._openConnections)
+        if channelId is None:
+            for openChannelId in openChannels:
+                self.ConsumerHealthCheck(channelId=openChannelId)
+        if channelId not in openChannels or \
+                channelId not in openConnections or \
+                channelId not in self._channelListenerQueues:
+            return False
+        connection = openConnections[channelId]
+        channel = openChannels[channelId]
+        listenerQueue = self._channelListenerQueues[channelId]
+        heartbeatInterval, nextHeartbeat, connectionWasDead = self._TriggerHeartbeatAndConnectionCheck(connection=connection,
+                                                                                                       channel=channel,
+                                                                                                       listenerQueue=listenerQueue,
+                                                                                                       channelId=channelId,
+                                                                                                       nextHeartbeat=0)
+        return not connectionWasDead
 
     def _StartConsumerWithRetryHandler(self,
                                        listenerQueue: str,
@@ -496,16 +520,32 @@ class PikaBusSetup(AbstractPikaBusSetup):
                              channelId: str):
         nextHeartbeat: int = -1
         heartbeatInterval: int = -1
+        self._logger.debug(f'Starting heartbeat task for channel {channelId}.')
         while channelId in self.channels:
-            heartbeatInterval, nextHeartbeat = self._PushHeartbeat(connection,
-                                                                   channelId,
-                                                                   heartbeatInterval,
-                                                                   nextHeartbeat)
-            self._CheckDeadConnection(channel,
-                                      listenerQueue,
-                                      channelId)
+            heartbeatInterval, nextHeartbeat, connectionWasDead = self._TriggerHeartbeatAndConnectionCheck(connection=connection,
+                                                                                                           channel=channel,
+                                                                                                           listenerQueue=listenerQueue,
+                                                                                                           channelId=channelId,
+                                                                                                           heartbeatInterval=heartbeatInterval,
+                                                                                                           nextHeartbeat=nextHeartbeat)
             time.sleep(min(heartbeatInterval, 10))
         self._logger.debug(f'Stopped heartbeat task for channel {channelId}.')
+
+    def _TriggerHeartbeatAndConnectionCheck(self,
+                                            connection: pika.BlockingConnection,
+                                            channel: pika.adapters.blocking_connection.BlockingChannel,
+                                            listenerQueue: str,
+                                            channelId: str,
+                                            heartbeatInterval: int = -1,
+                                            nextHeartbeat: int = -1):
+        heartbeatInterval, nextHeartbeat = self._PushHeartbeat(connection,
+                                                               channelId,
+                                                               heartbeatInterval,
+                                                               nextHeartbeat)
+        connectionWasDead = self._CheckDeadConnection(channel,
+                                                      listenerQueue,
+                                                      channelId)
+        return heartbeatInterval, nextHeartbeat, connectionWasDead
 
     def _PushHeartbeat(self,
                        connection: pika.BlockingConnection,
