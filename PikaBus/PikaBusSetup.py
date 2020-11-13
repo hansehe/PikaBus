@@ -107,6 +107,7 @@ class PikaBusSetup(AbstractPikaBusSetup):
         self._channelTimestamps = {}
         self._channelListenerQueues = {}
         self._logger = logger
+        self._stopAllConsumers = False
 
         if registerStopConsumersMethodAtExit:
             atexit.register(self.StopConsumers)
@@ -217,6 +218,7 @@ class PikaBusSetup(AbstractPikaBusSetup):
         openChannels = self.channels
         openConnections = dict(self._openConnections)
         if channelId is None:
+            self._stopAllConsumers = True
             for openChannelId in openChannels:
                 self.Stop(channelId=openChannelId,
                           forceCloseChannel=forceCloseChannel)
@@ -256,6 +258,7 @@ class PikaBusSetup(AbstractPikaBusSetup):
                                directExchange=directExchange,
                                directExchangeSettings=directExchangeSettings,
                                subscriptions=subscriptions)
+        self._stopAllConsumers = False
         if loop is None:
             loop = asyncio.get_event_loop()
         tasks = []
@@ -360,7 +363,7 @@ class PikaBusSetup(AbstractPikaBusSetup):
                                        loop: asyncio.AbstractEventLoop = None,
                                        executor: ThreadPoolExecutor = None):
         tries = self._retryParams.get('tries', -1)
-        while tries:
+        while tries and not self._stopAllConsumers:
             self._logger.debug(f'Starting async consumer with {tries} tries (-1 = infinite) left')
             retry.api.retry_call(self._AssertConnection,
                                  exceptions=Exception,
