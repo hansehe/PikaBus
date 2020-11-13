@@ -86,12 +86,12 @@ class PikaBus(AbstractPikaBus):
         replyToAddressHeaderKey = self._pikaProperties.replyToAddressHeaderKey
         if PikaConstants.DATA_KEY_INCOMING_MESSAGE not in self._data:
             msg = 'Cannot perform a reply outside of a message transaction.'
-            self._logger.exception(msg)
+            self._logger.error(msg)
             raise Exception(msg)
         incomingMessageHeaders: dict = self._data[PikaConstants.DATA_KEY_INCOMING_MESSAGE][PikaConstants.DATA_KEY_HEADER_FRAME].headers
         if replyToAddressHeaderKey not in incomingMessageHeaders:
             msg = f"The reply address header key {replyToAddressHeaderKey} is not present in incoming message headers."
-            self._logger.exception(msg)
+            self._logger.error(msg)
             raise Exception(msg)
         replyToAddress = incomingMessageHeaders[replyToAddressHeaderKey]
         self.Send(payload, queue=replyToAddress, headers=headers, messageType=messageType, exchange=exchange)
@@ -136,7 +136,7 @@ class PikaBus(AbstractPikaBus):
         if queue is None:
             if self._listenerQueue is None:
                 msg = f'Cannot use local listener queue when it is not defined!'
-                self._logger.exception(msg)
+                self._logger.error(msg)
                 raise Exception(msg)
             queue = self._listenerQueue
         return queue

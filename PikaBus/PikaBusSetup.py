@@ -197,7 +197,6 @@ class PikaBusSetup(AbstractPikaBusSetup):
             try:
                 channel.start_consuming()
             except Exception as exception:
-                self._logger.exception(f'{str(type(exception))}: {str(exception)}')
                 if channelId not in self._forceCloseChannelIds:
                     self._logger.debug(f'Consumer with channel id {channelId} '
                                        f'failed due to unknown exception - '
@@ -231,7 +230,7 @@ class PikaBusSetup(AbstractPikaBusSetup):
                 try:
                     channel.stop_consuming()
                 except Exception as exception:
-                    self._logger.exception(f'Failed stopping consumer channel {channelId} - Ignoring - {str(exception)}')
+                    self._logger.debug(f'Failed stopping consumer channel {channelId} - Ignoring - {str(type(exception))}: {str(exception)}')
                     connection: pika.BlockingConnection = openConnections.get(channelId, None)
                     if connection is not None:
                         self._logger.debug(f'Closing connection with channel {channelId}')
@@ -384,7 +383,7 @@ class PikaBusSetup(AbstractPikaBusSetup):
                 self._logger.debug(f'Safely stopped async consumer')
                 return
             except Exception as exception:
-                self._logger.exception(f'Failed async consumer: {str(exception)}')
+                self._logger.debug(f'Failed async consumer: {str(exception)}')
             tries -= 1
 
     def _AssertConnection(self,
@@ -515,7 +514,7 @@ class PikaBusSetup(AbstractPikaBusSetup):
         listenerQueue, listenerQueueSettings = self._GetListenerQueue(listenerQueue, listenerQueueSettings)
         if listenerQueue is None:
             msg = "Listening queue is not set, so you cannot start the listener process."
-            self._logger.exception(msg)
+            self._logger.error(msg)
             raise Exception(msg)
         return listenerQueue, listenerQueueSettings
 
@@ -576,8 +575,8 @@ class PikaBusSetup(AbstractPikaBusSetup):
                 self._logger.debug(f'Triggering connection heartbeat with channel {channelId}')
                 connection.process_data_events()
                 self._logger.debug(f'Connection heartbeat triggered with channel {channelId} after {time.time() - heartBeatStart} seconds.')
-            except Exception as error:
-                self._logger.exception(f'Heartbeat failure with channel {channelId}: {str(error)}')
+            except Exception as exception:
+                self._logger.debug(f'Heartbeat failure with channel {channelId}: {str(type(exception))}: {str(exception)}')
         nextHeartbeat = time.time() + heartbeatInterval
         return heartbeatInterval, nextHeartbeat
 
@@ -587,8 +586,8 @@ class PikaBusSetup(AbstractPikaBusSetup):
                              channelId: str):
         try:
             queueMessagesCount = self._GetQueueMessagesCount(channel, listenerQueue)
-        except Exception as error:
-            self._logger.exception(f'Failed fetching queue message count with channel {channelId}: {str(error)}')
+        except Exception as exception:
+            self._logger.debug(f'Failed fetching queue message count with channel {channelId}: {str(type(exception))}: {str(exception)}')
             queueMessagesCount = -1
         lastReceivedMessageTimeout = time.time() - self._channelTimestamps.get(channelId, time.time())
         if queueMessagesCount != 0 and 0 < self._connectionDeadTimeout < lastReceivedMessageTimeout:

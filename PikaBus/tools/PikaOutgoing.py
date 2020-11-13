@@ -58,7 +58,7 @@ def SendOrPublishOutgoingMessage(data: dict, outgoingMessage: dict):
                             mandatory=mandatory)
     else:
         msg = f'Outgoing type {intent} is not implemented!'
-        logger.exception(msg)
+        logger.error(msg)
         raise Exception(msg)
 
 

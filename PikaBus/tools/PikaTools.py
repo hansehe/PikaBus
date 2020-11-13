@@ -54,7 +54,7 @@ def AssertDurableQueueExists(connection: pika.BlockingConnection, queue: str, re
             if count <= retries:
                 time.sleep(1)
     msg = f"Queue {queue} does not exist!"
-    logger.exception(msg)
+    logger.error(msg)
     raise Exception(msg)
 
 
