@@ -39,7 +39,7 @@ class PikaBusSetup(AbstractPikaBusSetup):
                  prefetchSize: int = 0,
                  prefetchCount: int = 0,
                  registerStopConsumersMethodAtExit: bool = True,
-                 connectionDeadTimeout: int = 10,
+                 connectionDeadTimeout: int = 0,
                  connectionResetTimeout: int = 0,
                  logger=logging.getLogger(__name__)):
         """
