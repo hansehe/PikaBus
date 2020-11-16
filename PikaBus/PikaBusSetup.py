@@ -40,7 +40,7 @@ class PikaBusSetup(AbstractPikaBusSetup):
                  prefetchCount: int = 0,
                  registerStopConsumersMethodAtExit: bool = True,
                  connectionDeadTimeout: int = 10,
-                 connectionResetTimeout: int = 120,
+                 connectionResetTimeout: int = 0,
                  logger=logging.getLogger(__name__)):
         """
         :param pika.ConnectionParameters connParams: Pika connection parameters.
@@ -318,29 +318,23 @@ class PikaBusSetup(AbstractPikaBusSetup):
             loop = asyncio.get_event_loop()
         return loop.run_until_complete(asyncio.gather(*consumingTasks))
 
-    def ConsumerHealthCheck(self,
-                            channelId: str = None):
+    def HealthCheck(self,
+                    channelId: str = None):
         openChannels = self.channels
         openConnections = dict(self._openConnections)
         health = True
         if channelId is None:
             for openChannelId in openChannels:
-                health &= self.ConsumerHealthCheck(channelId=openChannelId)
+                health &= self.HealthCheck(channelId=openChannelId)
             return health
         if channelId not in openChannels or \
                 channelId not in openConnections or \
                 channelId not in self._channelListenerQueues:
             return health
-        connection = openConnections[channelId]
-        channel = openChannels[channelId]
-        listenerQueue = self._channelListenerQueues[channelId]
-        heartbeatInterval, nextHeartbeat, nextConnectionReset, connectionWasDead = self._TriggerHeartbeatAndConnectionCheck(connection=connection,
-                                                                                                                            channel=channel,
-                                                                                                                            listenerQueue=listenerQueue,
-                                                                                                                            channelId=channelId,
-                                                                                                                            nextHeartbeat=0,
-                                                                                                                            nextConnectionReset=0)
-        health &= not connectionWasDead
+        connection: pika.BlockingConnection = openConnections[channelId]
+        channel: pika.adapters.blocking_connection.BlockingChannel = openChannels[channelId]
+        health &= connection.is_open
+        health &= channel.is_open
         return health
 
     def QueueMessagesCount(self,
@@ -539,13 +533,13 @@ class PikaBusSetup(AbstractPikaBusSetup):
         nextConnectionReset: int = -1
         self._logger.debug(f'Starting heartbeat task for channel {channelId}.')
         while channelId in self.channels:
-            heartbeatInterval, nextHeartbeat, nextConnectionReset, connectionWasDead = self._TriggerHeartbeatAndConnectionCheck(connection=connection,
-                                                                                                                                channel=channel,
-                                                                                                                                listenerQueue=listenerQueue,
-                                                                                                                                channelId=channelId,
-                                                                                                                                heartbeatInterval=heartbeatInterval,
-                                                                                                                                nextHeartbeat=nextHeartbeat,
-                                                                                                                                nextConnectionReset=nextConnectionReset)
+            heartbeatInterval, nextHeartbeat, nextConnectionReset, connectionWasClosed = self._TriggerHeartbeatAndConnectionCheck(connection=connection,
+                                                                                                                                  channel=channel,
+                                                                                                                                  listenerQueue=listenerQueue,
+                                                                                                                                  channelId=channelId,
+                                                                                                                                  heartbeatInterval=heartbeatInterval,
+                                                                                                                                  nextHeartbeat=nextHeartbeat,
+                                                                                                                                  nextConnectionReset=nextConnectionReset)
             time.sleep(min(heartbeatInterval, 10))
         self._logger.debug(f'Stopped heartbeat task for channel {channelId}.')
 
@@ -561,11 +555,11 @@ class PikaBusSetup(AbstractPikaBusSetup):
                                                                channelId,
                                                                heartbeatInterval,
                                                                nextHeartbeat)
-        nextConnectionReset, connectionWasDead = self._CheckDeadConnection(channel,
-                                                                           listenerQueue,
-                                                                           channelId,
-                                                                           nextConnectionReset)
-        return heartbeatInterval, nextHeartbeat, nextConnectionReset, connectionWasDead
+        nextConnectionReset, connectionWasClosed = self._CheckDeadConnection(channel,
+                                                                             listenerQueue,
+                                                                             channelId,
+                                                                             nextConnectionReset)
+        return heartbeatInterval, nextHeartbeat, nextConnectionReset, connectionWasClosed
 
     def _PushHeartbeat(self,
                        connection: pika.BlockingConnection,
@@ -585,7 +579,7 @@ class PikaBusSetup(AbstractPikaBusSetup):
                 self._logger.debug(f'Connection heartbeat triggered with channel {channelId} after {time.time() - heartBeatStart} seconds.')
             except Exception as exception:
                 self._logger.debug(f'Heartbeat failure with channel {channelId}: {str(type(exception))}: {str(exception)}')
-        nextHeartbeat = time.time() + heartbeatInterval
+            nextHeartbeat = time.time() + heartbeatInterval
         return heartbeatInterval, nextHeartbeat
 
     def _CheckDeadConnection(self,
@@ -593,7 +587,7 @@ class PikaBusSetup(AbstractPikaBusSetup):
                              listenerQueue: str,
                              channelId: str,
                              nextConnectionReset: int = -1):
-        if nextConnectionReset < 0 < self._connectionResetTimeout:
+        if nextConnectionReset < 0:
             nextConnectionReset = time.time() + self._connectionResetTimeout
         try:
             queueMessagesCount = self._GetQueueMessagesCount(channel, listenerQueue)
@@ -605,9 +599,10 @@ class PikaBusSetup(AbstractPikaBusSetup):
         if queueMessagesCount != 0 and 0 < self._connectionDeadTimeout < lastReceivedMessageTimeout:
             self._logger.debug(f'Closing channel {channelId} due to dead channel timeout.')
             closeChannel = True
-        if queueMessagesCount == 0 and 0 < nextConnectionReset < time.time():
+        if queueMessagesCount == 0 and 0 < self._connectionResetTimeout and nextConnectionReset < time.time():
             self._logger.debug(f'Closing channel {channelId} due to reset connection timeout.')
             closeChannel = True
+            nextConnectionReset = time.time() + self._connectionResetTimeout
         if closeChannel:
             self.Stop(channelId, forceCloseChannel=False)
             if channelId in self._channelTimestamps:

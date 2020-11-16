@@ -167,10 +167,10 @@ class AbstractPikaBusSetup(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def ConsumerHealthCheck(self,
-                            channelId: str = None):
+    def HealthCheck(self,
+                    channelId: str = None):
         """
-        Verify consumer health check and restart consumer if necessary. Run this method on every health check.
+        Verify consumer health check.
         :param str channelId: Optional channel id. Get open channels with self.channels.
         :rtype: bool
         """

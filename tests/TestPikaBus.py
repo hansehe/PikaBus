@@ -74,7 +74,7 @@ class TestPikaBus(unittest.TestCase):
                 busWithTransaction.Publish(payload=publisedPayload, topic=topic)
             bus.Send(payload=failingPayload)
             self.assertRaises(Exception, bus.Reply, sentPayload)
-            self.assertTrue(pikaBusSetup.ConsumerHealthCheck())
+            self.assertTrue(pikaBusSetup.HealthCheck())
             messagesCount = pikaBusSetup.QueueMessagesCount()
             self.assertTrue(messagesCount >= 0)
         finally:
