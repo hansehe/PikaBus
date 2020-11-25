@@ -452,27 +452,31 @@ class PikaBusSetup(AbstractPikaBusSetup):
                            listenerQueue: str,
                            topicExchange: str = None,
                            directExchange: str = None):
-        self._channelTimestamps[channelId] = time.time()
-        self._logger.debug(f"Received new message on channel {channelId}")
-        data = self._CreateDefaultDataHolder(connection, channel, listenerQueue,
-                                             topicExchange=topicExchange,
-                                             directExchange=directExchange)
-        data[PikaConstants.DATA_KEY_MESSAGE_HANDLERS] = list(self.messageHandlers)
-        incomingMessage = {
-            PikaConstants.DATA_KEY_METHOD_FRAME: methodFrame,
-            PikaConstants.DATA_KEY_HEADER_FRAME: headerFrame,
-            PikaConstants.DATA_KEY_BODY: body,
-        }
-        data[PikaConstants.DATA_KEY_INCOMING_MESSAGE] = incomingMessage
+        try:
+            self._channelTimestamps[channelId] = time.time()
+            self._logger.debug(f"Received new message on channel {channelId}")
+            data = self._CreateDefaultDataHolder(connection, channel, listenerQueue,
+                                                 topicExchange=topicExchange,
+                                                 directExchange=directExchange)
+            data[PikaConstants.DATA_KEY_MESSAGE_HANDLERS] = list(self.messageHandlers)
+            incomingMessage = {
+                PikaConstants.DATA_KEY_METHOD_FRAME: methodFrame,
+                PikaConstants.DATA_KEY_HEADER_FRAME: headerFrame,
+                PikaConstants.DATA_KEY_BODY: body,
+            }
+            data[PikaConstants.DATA_KEY_INCOMING_MESSAGE] = incomingMessage
 
-        pikaBus: AbstractPikaBus = self._pikaBusCreateMethod(data=data,
-                                                             closeChannelOnDelete=False,
-                                                             closeConnectionOnDelete=False)
-        data[PikaConstants.DATA_KEY_BUS] = pikaBus
+            pikaBus: AbstractPikaBus = self._pikaBusCreateMethod(data=data,
+                                                                 closeChannelOnDelete=False,
+                                                                 closeConnectionOnDelete=False)
+            data[PikaConstants.DATA_KEY_BUS] = pikaBus
 
-        pipelineIterator = iter(self._pipeline)
-        PikaSteps.HandleNextStep(pipelineIterator, data)
-        self._logger.debug(f"Successfully handled message on channel {channelId}")
+            pipelineIterator = iter(self._pipeline)
+            PikaSteps.HandleNextStep(pipelineIterator, data)
+            self._logger.debug(f"Successfully handled message on channel {channelId}")
+        except Exception as exception:
+            channel.basic_nack(methodFrame.delivery_tag)
+            self._logger.exception(f"Failed handling message on channel {channelId} - {str(exception)}")
 
     def _CreateDefaultDataHolder(self,
                                  connection: pika.BlockingConnection,
