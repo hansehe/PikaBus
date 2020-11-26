@@ -77,6 +77,9 @@ class AbstractPikaBusSetup(abc.ABC):
               directExchange: str = None,
               directExchangeSettings: dict = None,
               subscriptions: Union[List[str], str] = None,
+              confirmDelivery: bool = None,
+              prefetchSize: int = None,
+              prefetchCount: int = None,
               loop: asyncio.AbstractEventLoop = None,
               executor: concurrent.futures.ThreadPoolExecutor = None):
         """
@@ -87,6 +90,9 @@ class AbstractPikaBusSetup(abc.ABC):
         :param str directExchange: Optional direct exchange to override default direct exchange.
         :param dict directExchangeSettings: Optional direct exchange settings.
         :param [str] | str subscriptions: Optional topic or a list of topics to subscribe, overriding default topic subscriptions.
+        :param bool confirmDelivery: Activate confirm delivery with publisher confirms by default on all channels.
+        :param int prefetchSize: Specify the default prefetch window size for each channel. 0 means it is deactivated.
+        :param int prefetchCount: Specify the default prefetch count for each channel. 0 means it is deactivated.
         :param asyncio.AbstractEventLoop loop: Event loop. Defaults to current event loop if None.
         :param executor: concurrent.futures.ThreadPoolExecutor executor: Executor. Defaults to current executor if None.
         Start blocking bus consumer channel.
@@ -114,6 +120,9 @@ class AbstractPikaBusSetup(abc.ABC):
                    directExchange: str = None,
                    directExchangeSettings: dict = None,
                    subscriptions: Union[List[str], str] = None,
+                   confirmDelivery: bool = None,
+                   prefetchSize: int = None,
+                   prefetchCount: int = None,
                    loop: asyncio.AbstractEventLoop = None,
                    executor: concurrent.futures.ThreadPoolExecutor = None):
         """
@@ -126,6 +135,9 @@ class AbstractPikaBusSetup(abc.ABC):
         :param str directExchange: Optional direct exchange to override default direct exchange.
         :param dict directExchangeSettings: Optional direct exchange settings.
         :param [str] | str subscriptions: Optional topic or a list of topics to subscribe, overriding default topic subscriptions.
+        :param bool confirmDelivery: Activate confirm delivery with publisher confirms by default on all channels.
+        :param int prefetchSize: Specify the default prefetch window size for each channel. 0 means it is deactivated.
+        :param int prefetchCount: Specify the default prefetch count for each channel. 0 means it is deactivated.
         :param asyncio.AbstractEventLoop loop: Event loop. Defaults to current event loop if None.
         :param executor: concurrent.futures.ThreadPoolExecutor executor: Executor. Defaults to current executor if None.
         :rtype: [concurrent.futures.Future]
@@ -137,13 +149,15 @@ class AbstractPikaBusSetup(abc.ABC):
                   listenerQueue: str = None,
                   topicExchange: str = None,
                   directExchange: str = None,
-                  connection=None):
+                  connection=None,
+                  confirmDelivery: bool = None):
         """
         Create bus with separate channel.
         :param str listenerQueue: Optional listener queue to override default listener queue.
         :param str topicExchange: Optional topic exchange to override default topic exchange.
         :param str directExchange: Optional direct exchange to override default direct exchange.
         :param pika.adapters.blocking_connection connection: Optional connection to reuse an open connection. Get open connections with self.connections.
+        :param confirmDelivery: Optionally set publisher confirms to override default setup.
         :rtype: PikaBus.abstractions.AbstractPikaBus.AbstractPikaBus
         """
         pass

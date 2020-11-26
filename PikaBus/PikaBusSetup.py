@@ -9,7 +9,6 @@ import logging
 from typing import Union, Callable, List
 from concurrent.futures import ThreadPoolExecutor
 import functools
-import retry
 import atexit
 from PikaBus.abstractions.AbstractPikaBusSetup import AbstractPikaBusSetup
 from PikaBus.abstractions.AbstractPikaSerializer import AbstractPikaSerializer
@@ -30,17 +29,15 @@ class PikaBusSetup(AbstractPikaBusSetup):
                  defaultListenerQueueSettings: dict = None,
                  defaultDirectExchangeSettings: dict = None,
                  defaultTopicExchangeSettings: dict = None,
+                 defaultConfirmDelivery: bool = True,
+                 defaultPrefetchSize: int = 0,
+                 defaultPrefetchCount: int = 0,
                  pikaSerializer: AbstractPikaSerializer = None,
                  pikaProperties: AbstractPikaProperties = None,
                  pikaErrorHandler: AbstractPikaErrorHandler = None,
                  pikaBusCreateMethod: Callable = None,
                  retryParams: dict = None,
-                 confirmDelivery: bool = True,
-                 prefetchSize: int = 0,
-                 prefetchCount: int = 0,
                  registerStopConsumersMethodAtExit: bool = True,
-                 connectionDeadTimeout: int = 0,
-                 connectionResetTimeout: int = 0,
                  logger=logging.getLogger(__name__)):
         """
         :param pika.ConnectionParameters connParams: Pika connection parameters.
@@ -51,17 +48,15 @@ class PikaBusSetup(AbstractPikaBusSetup):
         :param dict defaultListenerQueueSettings: Default listener queue settings. 'arguments': {`ha-mode: all`} is activated by default to mirror the queue across all nodes.
         :param dict defaultDirectExchangeSettings: Default direct exchange settings.
         :param dict defaultTopicExchangeSettings: Default topic exchange settings.
+        :param bool defaultConfirmDelivery: Activate confirm delivery with publisher confirms by default on all channels.
+        :param int defaultPrefetchSize: Specify the default prefetch window size for each channel. 0 means it is deactivated.
+        :param int defaultPrefetchCount: Specify the default prefetch count for each channel. 0 means it is deactivated.
         :param AbstractPikaSerializer pikaSerializer: Optional serializer override.
         :param AbstractPikaProperties pikaProperties: Optional properties override.
         :param AbstractPikaErrorHandler pikaErrorHandler: Optional error handler override.
         :param def pikaBusCreateMethod: Optional pikaBus creator method which returns an instance of AbstractPikaBus.
         :param dict retryParams: A set of retry parameters. See options below in code.
-        :param bool confirmDelivery: Activate confirm delivery with publisher confirms on all channels.
-        :param int prefetchSize: Specify the prefetch window size for each channel. 0 means it is deactivated.
-        :param int prefetchCount: Specify the prefetch count for each channel. 0 means it is deactivated.
         :param bool registerStopConsumersMethodAtExit: Automatically stop all consumers when application stops.
-        :param int connectionDeadTimeout: Specify connection dead timeout in seconds. 0 means it is deactivated.
-        :param int connectionResetTimeout: Specify connection reset timeout in seconds. 0 means it is deactivated.
         :param logging logger: Logging object
         """
         if defaultSubscriptions is None:
@@ -91,6 +86,9 @@ class PikaBusSetup(AbstractPikaBusSetup):
         self._defaultListenerQueueSettings = defaultListenerQueueSettings
         self._defaultDirectExchangeSettings = defaultDirectExchangeSettings
         self._defaultTopicExchangeSettings = defaultTopicExchangeSettings
+        self._defaultConfirmDelivery = defaultConfirmDelivery
+        self._defaultPrefetchSize = defaultPrefetchSize
+        self._defaultPrefetchCount = defaultPrefetchCount
         self._pikaSerializer = pikaSerializer
         self._pikaProperties = pikaProperties
         self._pikaErrorHandler = pikaErrorHandler
@@ -101,14 +99,7 @@ class PikaBusSetup(AbstractPikaBusSetup):
         self._openConnections = {}
         self._pikaBusCreateMethod = pikaBusCreateMethod
         self._retryParams = retryParams
-        self._confirmDelivery = confirmDelivery
-        self._prefetchSize = prefetchSize
-        self._prefetchCount = prefetchCount
-        self._connectionDeadTimeout = connectionDeadTimeout
-        self._connectionResetTimeout = connectionResetTimeout
         self._allConsumingTasks = []
-        self._channelTimestamps = {}
-        self._channelListenerQueues = {}
         self._logger = logger
 
         if registerStopConsumersMethodAtExit:
@@ -142,14 +133,16 @@ class PikaBusSetup(AbstractPikaBusSetup):
              directExchangeSettings: dict = None,
              subscriptions: Union[List[str], str] = None):
         listenerQueue, listenerQueueSettings = self._GetListenerQueue(listenerQueue, listenerQueueSettings)
-        self._AssertConnection(createDefaultRabbitMqSetup=True,
-                               listenerQueue=listenerQueue,
-                               listenerQueueSettings=listenerQueueSettings,
-                               topicExchange=topicExchange,
-                               topicExchangeSettings=topicExchangeSettings,
-                               directExchange=directExchange,
-                               directExchangeSettings=directExchangeSettings,
-                               subscriptions=subscriptions)
+        with pika.BlockingConnection(self._connParams) as connection:
+            channel: pika.adapters.blocking_connection.BlockingChannel = connection.channel()
+            self._CreateDefaultRabbitMqSetup(channel,
+                                             listenerQueue,
+                                             listenerQueueSettings,
+                                             topicExchange,
+                                             topicExchangeSettings,
+                                             directExchange,
+                                             directExchangeSettings,
+                                             subscriptions)
 
     def Start(self,
               listenerQueue: str = None,
@@ -159,14 +152,29 @@ class PikaBusSetup(AbstractPikaBusSetup):
               directExchange: str = None,
               directExchangeSettings: dict = None,
               subscriptions: Union[List[str], str] = None,
+              confirmDelivery: bool = None,
+              prefetchSize: int = None,
+              prefetchCount: int = None,
               loop: asyncio.AbstractEventLoop = None,
               executor: ThreadPoolExecutor = None):
         if loop is None:
             loop = asyncio.get_event_loop()
+        if confirmDelivery is None:
+            confirmDelivery = self._defaultConfirmDelivery
+        if prefetchSize is None:
+            prefetchSize = self._defaultPrefetchSize
+        if prefetchCount is None:
+            prefetchCount = self._defaultPrefetchCount
         listenerQueue, listenerQueueSettings = self._AssertListenerQueueIsSet(listenerQueue, listenerQueueSettings)
+        self.Init(listenerQueue=listenerQueue,
+                  listenerQueueSettings=listenerQueueSettings,
+                  topicExchange=topicExchange,
+                  topicExchangeSettings=topicExchangeSettings,
+                  directExchange=directExchange,
+                  directExchangeSettings=directExchangeSettings,
+                  subscriptions=subscriptions)
         with pika.BlockingConnection(self._connParams) as connection:
             channelId = str(uuid.uuid1())
-            self._channelTimestamps[channelId] = time.time()
             channel: pika.adapters.blocking_connection.BlockingChannel = connection.channel()
             onMessageCallback = functools.partial(self._OnMessageCallBack,
                                                   connection=connection,
@@ -181,18 +189,16 @@ class PikaBusSetup(AbstractPikaBusSetup):
                                              topicExchangeSettings,
                                              directExchange,
                                              directExchangeSettings,
-                                             subscriptions)
-            channel.basic_qos(prefetch_size=self._prefetchSize, prefetch_count=self._prefetchCount)
+                                             subscriptions,
+                                             confirmDelivery)
+            channel.basic_qos(prefetch_size=prefetchSize, prefetch_count=prefetchCount)
             channel.basic_consume(listenerQueue, onMessageCallback)
             self._openChannels[channelId] = channel
             self._openConnections[channelId] = connection
-            self._channelListenerQueues[channelId] = listenerQueue
             self._logger.info(f'Starting new consumer channel with id {channelId} '
                               f'and {len(self.channels)} ongoing channels.')
             heartbeatFunc = functools.partial(self._ConnectionHeartbeat,
                                               connection=connection,
-                                              channel=channel,
-                                              listenerQueue=listenerQueue,
                                               channelId=channelId)
             connectionHeartbeatTask = loop.run_in_executor(executor, heartbeatFunc)
             futureConnectionHeartbeatTask = asyncio.ensure_future(connectionHeartbeatTask, loop=loop)
@@ -207,7 +213,6 @@ class PikaBusSetup(AbstractPikaBusSetup):
             finally:
                 self._openChannels.pop(channelId)
                 self._openConnections.pop(channelId)
-                self._channelListenerQueues.pop(channelId)
                 if channelId in self._forceCloseChannelIds:
                     self._forceCloseChannelIds.pop(channelId)
                 else:
@@ -248,17 +253,12 @@ class PikaBusSetup(AbstractPikaBusSetup):
                    directExchange: str = None,
                    directExchangeSettings: dict = None,
                    subscriptions: Union[List[str], str] = None,
+                   confirmDelivery: bool = None,
+                   prefetchSize: int = None,
+                   prefetchCount: int = None,
                    loop: asyncio.AbstractEventLoop = None,
                    executor: ThreadPoolExecutor = None):
         listenerQueue, listenerQueueSettings = self._AssertListenerQueueIsSet(listenerQueue, listenerQueueSettings)
-        self._AssertConnection(createDefaultRabbitMqSetup=True,
-                               listenerQueue=listenerQueue,
-                               listenerQueueSettings=listenerQueueSettings,
-                               topicExchange=topicExchange,
-                               topicExchangeSettings=topicExchangeSettings,
-                               directExchange=directExchange,
-                               directExchangeSettings=directExchangeSettings,
-                               subscriptions=subscriptions)
         if loop is None:
             loop = asyncio.get_event_loop()
         tasks = []
@@ -271,6 +271,9 @@ class PikaBusSetup(AbstractPikaBusSetup):
                                      directExchange=directExchange,
                                      directExchangeSettings=directExchangeSettings,
                                      subscriptions=subscriptions,
+                                     confirmDelivery=confirmDelivery,
+                                     prefetchSize=prefetchSize,
+                                     prefetchCount=prefetchCount,
                                      loop=loop,
                                      executor=executor)
             task = loop.run_in_executor(executor, func)
@@ -285,7 +288,8 @@ class PikaBusSetup(AbstractPikaBusSetup):
                   listenerQueue: str = None,
                   topicExchange: str = None,
                   directExchange: str = None,
-                  connection: pika.adapters.blocking_connection = None):
+                  connection: pika.adapters.blocking_connection = None,
+                  confirmDelivery: bool = None):
 
         closeConnectionOnDelete = False
         if connection is None:
@@ -293,7 +297,9 @@ class PikaBusSetup(AbstractPikaBusSetup):
             connection = pika.BlockingConnection(self._connParams)
 
         channel = connection.channel()
-        if self._confirmDelivery:
+        if confirmDelivery is None:
+            confirmDelivery = self._defaultConfirmDelivery
+        if confirmDelivery:
             channel.confirm_delivery()
 
         listenerQueue, listenerQueueSettings = self._GetListenerQueue(listenerQueue)
@@ -328,8 +334,7 @@ class PikaBusSetup(AbstractPikaBusSetup):
                 health &= self.HealthCheck(channelId=openChannelId)
             return health
         if channelId not in openChannels or \
-                channelId not in openConnections or \
-                channelId not in self._channelListenerQueues:
+                channelId not in openConnections:
             return health
         connection: pika.BlockingConnection = openConnections[channelId]
         channel: pika.adapters.blocking_connection.BlockingChannel = openChannels[channelId]
@@ -355,19 +360,14 @@ class PikaBusSetup(AbstractPikaBusSetup):
                                        directExchange: str,
                                        directExchangeSettings: dict,
                                        subscriptions: Union[List[str], str],
+                                       confirmDelivery: bool = None,
+                                       prefetchSize: int = None,
+                                       prefetchCount: int = None,
                                        loop: asyncio.AbstractEventLoop = None,
                                        executor: ThreadPoolExecutor = None):
         tries = self._retryParams.get('tries', -1)
         while tries:
             self._logger.debug(f'Starting async consumer with {tries} tries (-1 = infinite) left')
-            retry.api.retry_call(self._AssertConnection,
-                                 exceptions=Exception,
-                                 tries=tries,
-                                 delay=self._retryParams.get('delay', 1),
-                                 max_delay=self._retryParams.get('max_delay', 10),
-                                 backoff=self._retryParams.get('backoff', 1),
-                                 jitter=self._retryParams.get('jitter', 1),
-                                 logger=self._logger)
             try:
                 self.Start(listenerQueue=listenerQueue,
                            listenerQueueSettings=listenerQueueSettings,
@@ -376,6 +376,9 @@ class PikaBusSetup(AbstractPikaBusSetup):
                            directExchange=directExchange,
                            directExchangeSettings=directExchangeSettings,
                            subscriptions=subscriptions,
+                           confirmDelivery=confirmDelivery,
+                           prefetchSize=prefetchSize,
+                           prefetchCount=prefetchCount,
                            loop=loop,
                            executor=executor)
                 self._logger.debug(f'Safely stopped async consumer')
@@ -383,27 +386,6 @@ class PikaBusSetup(AbstractPikaBusSetup):
             except Exception as exception:
                 self._logger.debug(f'Failed async consumer: {str(exception)}')
             tries -= 1
-
-    def _AssertConnection(self,
-                          createDefaultRabbitMqSetup=False,
-                          listenerQueue: str = None,
-                          listenerQueueSettings: dict = None,
-                          topicExchange: str = None,
-                          topicExchangeSettings: dict = None,
-                          directExchange: str = None,
-                          directExchangeSettings: dict = None,
-                          subscriptions: Union[List[str], str] = None):
-        with pika.BlockingConnection(self._connParams) as connection:
-            channel: pika.adapters.blocking_connection.BlockingChannel = connection.channel()
-            if createDefaultRabbitMqSetup:
-                self._CreateDefaultRabbitMqSetup(channel,
-                                                 listenerQueue,
-                                                 listenerQueueSettings,
-                                                 topicExchange,
-                                                 topicExchangeSettings,
-                                                 directExchange,
-                                                 directExchangeSettings,
-                                                 subscriptions)
 
     def _CreateDefaultRabbitMqSetup(self,
                                     channel: pika.adapters.blocking_connection.BlockingChannel,
@@ -413,8 +395,11 @@ class PikaBusSetup(AbstractPikaBusSetup):
                                     topicExchangeSettings: dict = None,
                                     directExchange: str = None,
                                     directExchangeSettings: dict = None,
-                                    subscriptions: Union[List[str], str] = None):
-        if self._confirmDelivery:
+                                    subscriptions: Union[List[str], str] = None,
+                                    confirmDelivery: bool = None):
+        if confirmDelivery is None:
+            confirmDelivery = self._defaultConfirmDelivery
+        if confirmDelivery:
             channel.confirm_delivery()
         if topicExchange is None:
             topicExchange = self._defaultTopicExchange
@@ -453,7 +438,6 @@ class PikaBusSetup(AbstractPikaBusSetup):
                            topicExchange: str = None,
                            directExchange: str = None):
         try:
-            self._channelTimestamps[channelId] = time.time()
             self._logger.debug(f"Received new message on channel {channelId}")
             data = self._CreateDefaultDataHolder(connection, channel, listenerQueue,
                                                  topicExchange=topicExchange,
@@ -529,41 +513,17 @@ class PikaBusSetup(AbstractPikaBusSetup):
 
     def _ConnectionHeartbeat(self,
                              connection: pika.BlockingConnection,
-                             channel: pika.adapters.blocking_connection.BlockingChannel,
-                             listenerQueue: str,
                              channelId: str):
         heartbeatInterval: int = -1
         nextHeartbeat: int = -1
-        nextConnectionReset: int = -1
         self._logger.debug(f'Starting heartbeat task for channel {channelId}.')
         while channelId in self.channels:
-            heartbeatInterval, nextHeartbeat, nextConnectionReset, connectionWasClosed = self._TriggerHeartbeatAndConnectionCheck(connection=connection,
-                                                                                                                                  channel=channel,
-                                                                                                                                  listenerQueue=listenerQueue,
-                                                                                                                                  channelId=channelId,
-                                                                                                                                  heartbeatInterval=heartbeatInterval,
-                                                                                                                                  nextHeartbeat=nextHeartbeat,
-                                                                                                                                  nextConnectionReset=nextConnectionReset)
+            heartbeatInterval, nextHeartbeat = self._PushHeartbeat(connection,
+                                                                   channelId,
+                                                                   heartbeatInterval,
+                                                                   nextHeartbeat)
             time.sleep(min(heartbeatInterval, 10))
         self._logger.debug(f'Stopped heartbeat task for channel {channelId}.')
-
-    def _TriggerHeartbeatAndConnectionCheck(self,
-                                            connection: pika.BlockingConnection,
-                                            channel: pika.adapters.blocking_connection.BlockingChannel,
-                                            listenerQueue: str,
-                                            channelId: str,
-                                            heartbeatInterval: int = -1,
-                                            nextHeartbeat: int = -1,
-                                            nextConnectionReset: int = -1):
-        heartbeatInterval, nextHeartbeat = self._PushHeartbeat(connection,
-                                                               channelId,
-                                                               heartbeatInterval,
-                                                               nextHeartbeat)
-        nextConnectionReset, connectionWasClosed = self._CheckDeadConnection(channel,
-                                                                             listenerQueue,
-                                                                             channelId,
-                                                                             nextConnectionReset)
-        return heartbeatInterval, nextHeartbeat, nextConnectionReset, connectionWasClosed
 
     def _PushHeartbeat(self,
                        connection: pika.BlockingConnection,
@@ -585,33 +545,6 @@ class PikaBusSetup(AbstractPikaBusSetup):
                 self._logger.debug(f'Heartbeat failure with channel {channelId}: {str(type(exception))}: {str(exception)}')
             nextHeartbeat = time.time() + heartbeatInterval
         return heartbeatInterval, nextHeartbeat
-
-    def _CheckDeadConnection(self,
-                             channel: pika.adapters.blocking_connection.BlockingChannel,
-                             listenerQueue: str,
-                             channelId: str,
-                             nextConnectionReset: int = -1):
-        if nextConnectionReset < 0:
-            nextConnectionReset = time.time() + self._connectionResetTimeout
-        try:
-            queueMessagesCount = self._GetQueueMessagesCount(channel, listenerQueue)
-        except Exception as exception:
-            self._logger.debug(f'Failed fetching queue message count with channel {channelId}: {str(type(exception))}: {str(exception)}')
-            queueMessagesCount = -1
-        lastReceivedMessageTimeout = time.time() - self._channelTimestamps.get(channelId, time.time())
-        closeChannel = False
-        if queueMessagesCount != 0 and 0 < self._connectionDeadTimeout < lastReceivedMessageTimeout:
-            self._logger.debug(f'Closing channel {channelId} due to dead channel timeout.')
-            closeChannel = True
-        if queueMessagesCount == 0 and 0 < self._connectionResetTimeout and nextConnectionReset < time.time():
-            self._logger.debug(f'Closing channel {channelId} due to reset connection timeout.')
-            closeChannel = True
-            nextConnectionReset = time.time() + self._connectionResetTimeout
-        if closeChannel:
-            self.Stop(channelId, forceCloseChannel=False)
-            if channelId in self._channelTimestamps:
-                self._channelTimestamps.pop(channelId)
-        return nextConnectionReset, closeChannel
 
     def _GetQueueMessagesCount(self, channel: pika.adapters.blocking_connection.BlockingChannel, queue: str):
         if channel.is_closed:
