@@ -166,13 +166,6 @@ class PikaBusSetup(AbstractPikaBusSetup):
         if prefetchCount is None:
             prefetchCount = self._defaultPrefetchCount
         listenerQueue, listenerQueueSettings = self._AssertListenerQueueIsSet(listenerQueue, listenerQueueSettings)
-        self.Init(listenerQueue=listenerQueue,
-                  listenerQueueSettings=listenerQueueSettings,
-                  topicExchange=topicExchange,
-                  topicExchangeSettings=topicExchangeSettings,
-                  directExchange=directExchange,
-                  directExchangeSettings=directExchangeSettings,
-                  subscriptions=subscriptions)
         with pika.BlockingConnection(self._connParams) as connection:
             channelId = str(uuid.uuid1())
             channel: pika.adapters.blocking_connection.BlockingChannel = connection.channel()
