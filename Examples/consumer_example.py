@@ -32,7 +32,7 @@ pikaBusSetup = PikaBusSetup(connParams,
 pikaBusSetup.AddMessageHandler(MessageHandlerMethod)
 
 # Start consuming messages from the queue.
-pikaBusSetup.StartAsync()
+pikaBusSetup.StartConsumers()
 
 input('Hit enter to stop all consuming channels \n\n')
 pikaBusSetup.StopConsumers()

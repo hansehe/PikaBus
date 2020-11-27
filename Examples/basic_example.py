@@ -33,7 +33,7 @@ pikaBusSetup = PikaBusSetup(connParams,
 pikaBusSetup.AddMessageHandler(MessageHandlerMethod)
 
 # Start consuming messages from the queue.
-pikaBusSetup.StartAsync()
+pikaBusSetup.StartConsumers()
 
 # Create a temporary bus to subscribe on topics and send, defer or publish messages.
 bus = pikaBusSetup.CreateBus()

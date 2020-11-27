@@ -37,7 +37,7 @@ pikaBusSetup = PikaBusSetup(connParams,
 pikaBusSetup.AddMessageHandler(MessageHandlerMethod)
 
 # Start consuming messages from the queue
-pikaBusSetup.StartAsync()
+pikaBusSetup.StartConsumers()
 
 # Create a flask app
 app = Flask(__name__)

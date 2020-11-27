@@ -90,9 +90,9 @@ class AbstractPikaBusSetup(abc.ABC):
         :param str directExchange: Optional direct exchange to override default direct exchange.
         :param dict directExchangeSettings: Optional direct exchange settings.
         :param [str] | str subscriptions: Optional topic or a list of topics to subscribe, overriding default topic subscriptions.
-        :param bool confirmDelivery: Activate confirm delivery with publisher confirms by default on all channels.
-        :param int prefetchSize: Specify the default prefetch window size for each channel. 0 means it is deactivated.
-        :param int prefetchCount: Specify the default prefetch count for each channel. 0 means it is deactivated.
+        :param bool confirmDelivery: Activate confirm delivery with publisher confirms by on all channels.
+        :param int prefetchSize: Specify prefetch window size for each channel. 0 means it is deactivated.
+        :param int prefetchCount: Specify prefetch count for each channel. 0 means it is deactivated.
         :param asyncio.AbstractEventLoop loop: Event loop. Defaults to current event loop if None.
         :param executor: concurrent.futures.ThreadPoolExecutor executor: Executor. Defaults to current executor if None.
         Start blocking bus consumer channel.
@@ -111,23 +111,23 @@ class AbstractPikaBusSetup(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def StartAsync(self,
-                   consumers: int = 1,
-                   listenerQueue: str = None,
-                   listenerQueueSettings: dict = None,
-                   topicExchange: str = None,
-                   topicExchangeSettings: dict = None,
-                   directExchange: str = None,
-                   directExchangeSettings: dict = None,
-                   subscriptions: Union[List[str], str] = None,
-                   confirmDelivery: bool = None,
-                   prefetchSize: int = None,
-                   prefetchCount: int = None,
-                   loop: asyncio.AbstractEventLoop = None,
-                   executor: concurrent.futures.ThreadPoolExecutor = None):
+    def StartConsumers(self,
+                       consumerCount: int = None,
+                       listenerQueue: str = None,
+                       listenerQueueSettings: dict = None,
+                       topicExchange: str = None,
+                       topicExchangeSettings: dict = None,
+                       directExchange: str = None,
+                       directExchangeSettings: dict = None,
+                       subscriptions: Union[List[str], str] = None,
+                       confirmDelivery: bool = None,
+                       prefetchSize: int = None,
+                       prefetchCount: int = None,
+                       loop: asyncio.AbstractEventLoop = None,
+                       executor: concurrent.futures.ThreadPoolExecutor = None):
         """
         Start consumers as asynchronous tasks.
-        :param int consumers: Number of consumers to start.
+        :param int consumerCount: Optional number of consumers to start to override default consumer count.
         :param str listenerQueue: Optional listener queue to override default listener queue.
         :param dict listenerQueueSettings: Optional listener queue settings.
         :param str topicExchange: Optional topic exchange to override default topic exchange.
@@ -135,12 +135,35 @@ class AbstractPikaBusSetup(abc.ABC):
         :param str directExchange: Optional direct exchange to override default direct exchange.
         :param dict directExchangeSettings: Optional direct exchange settings.
         :param [str] | str subscriptions: Optional topic or a list of topics to subscribe, overriding default topic subscriptions.
-        :param bool confirmDelivery: Activate confirm delivery with publisher confirms by default on all channels.
-        :param int prefetchSize: Specify the default prefetch window size for each channel. 0 means it is deactivated.
-        :param int prefetchCount: Specify the default prefetch count for each channel. 0 means it is deactivated.
+        :param bool confirmDelivery: Activate confirm delivery with publisher confirms by on all channels.
+        :param int prefetchSize: Specify prefetch window size for each channel. 0 means it is deactivated.
+        :param int prefetchCount: Specify prefetch count for each channel. 0 means it is deactivated.
         :param asyncio.AbstractEventLoop loop: Event loop. Defaults to current event loop if None.
         :param executor: concurrent.futures.ThreadPoolExecutor executor: Executor. Defaults to current executor if None.
         :rtype: [concurrent.futures.Future]
+        """
+        pass
+
+    @abc.abstractmethod
+    def StopConsumers(self,
+                      consumingTasks: List[asyncio.Future] = None,
+                      loop: asyncio.AbstractEventLoop = None):
+
+        """
+        Stop consumers and wait until they are stopped.
+        :param List[asyncio.Future] consumingTasks: List of asyncio consuming tasks returned when calling StartConsumers(..).
+        :param asyncio.AbstractEventLoop loop: Event loop. Defaults to current event loop if None.
+        """
+        pass
+
+    @abc.abstractmethod
+    def LoopForever(self,
+                    consumingTasks: List[asyncio.Future] = None,
+                    loop: asyncio.AbstractEventLoop = None):
+        """
+        Loop forever until consumers are stopped.
+        :param List[asyncio.Future] consumingTasks: List of asyncio consuming tasks returned when calling StartConsumers(..).
+        :param asyncio.AbstractEventLoop loop: Event loop. Defaults to current event loop if None.
         """
         pass
 
@@ -166,17 +189,6 @@ class AbstractPikaBusSetup(abc.ABC):
     def AddMessageHandler(self, messageHandler: Union[AbstractPikaMessageHandler, Callable]):
         """
         :param AbstractPikaMessageHandler | def messageHandler: An abstract message handler class or a method with `**kwargs` input.
-        """
-        pass
-
-    @abc.abstractmethod
-    def StopConsumers(self,
-                      consumingTasks: List[asyncio.Future] = None,
-                      loop: asyncio.AbstractEventLoop = None):
-
-        """
-        :param List[asyncio.Future] consumingTasks: List of asyncio consuming tasks returned when calling StartAsync(..).
-        :param asyncio.AbstractEventLoop loop: Event loop. Defaults to current event loop if None.
         """
         pass
 

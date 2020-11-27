@@ -56,8 +56,8 @@ class TestPikaBus(unittest.TestCase):
         pikaBusSetup.AddMessageHandler(self.messageHandlerMethod)
         pikaBusErrorSetup.AddMessageHandler(errorMessageHandler)
         busCreatedBeforeStart = pikaBusSetup.CreateBus()
-        tasks = pikaBusSetup.StartAsync(consumers=2)
-        errorTasks = pikaBusErrorSetup.StartAsync()
+        tasks = pikaBusSetup.StartConsumers(consumerCount=2)
+        errorTasks = pikaBusErrorSetup.StartConsumers()
         try:
             bus = pikaBusSetup.CreateBus()
             reusedConnection = pika.BlockingConnection(TestTools.GetDefaultConnectionParams())

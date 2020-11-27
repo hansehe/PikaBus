@@ -32,6 +32,7 @@ class PikaBusSetup(AbstractPikaBusSetup):
                  defaultConfirmDelivery: bool = True,
                  defaultPrefetchSize: int = 0,
                  defaultPrefetchCount: int = 0,
+                 defaultConsumerCount: int = 1,
                  pikaSerializer: AbstractPikaSerializer = None,
                  pikaProperties: AbstractPikaProperties = None,
                  pikaErrorHandler: AbstractPikaErrorHandler = None,
@@ -49,8 +50,9 @@ class PikaBusSetup(AbstractPikaBusSetup):
         :param dict defaultDirectExchangeSettings: Default direct exchange settings.
         :param dict defaultTopicExchangeSettings: Default topic exchange settings.
         :param bool defaultConfirmDelivery: Activate confirm delivery with publisher confirms by default on all channels.
-        :param int defaultPrefetchSize: Specify the default prefetch window size for each channel. 0 means it is deactivated.
-        :param int defaultPrefetchCount: Specify the default prefetch count for each channel. 0 means it is deactivated.
+        :param int defaultPrefetchSize: Specify default prefetch window size for each channel. 0 means it is deactivated.
+        :param int defaultPrefetchCount: Specify default prefetch count for each channel. 0 means it is deactivated.
+        :param int defaultConsumerCount: Specify default consumer count. Default is 1.
         :param AbstractPikaSerializer pikaSerializer: Optional serializer override.
         :param AbstractPikaProperties pikaProperties: Optional properties override.
         :param AbstractPikaErrorHandler pikaErrorHandler: Optional error handler override.
@@ -89,6 +91,7 @@ class PikaBusSetup(AbstractPikaBusSetup):
         self._defaultConfirmDelivery = defaultConfirmDelivery
         self._defaultPrefetchSize = defaultPrefetchSize
         self._defaultPrefetchCount = defaultPrefetchCount
+        self._defaultConsumerCount = defaultConsumerCount
         self._pikaSerializer = pikaSerializer
         self._pikaProperties = pikaProperties
         self._pikaErrorHandler = pikaErrorHandler
@@ -159,8 +162,6 @@ class PikaBusSetup(AbstractPikaBusSetup):
               executor: ThreadPoolExecutor = None):
         if loop is None:
             loop = asyncio.get_event_loop()
-        if confirmDelivery is None:
-            confirmDelivery = self._defaultConfirmDelivery
         if prefetchSize is None:
             prefetchSize = self._defaultPrefetchSize
         if prefetchCount is None:
@@ -237,25 +238,27 @@ class PikaBusSetup(AbstractPikaBusSetup):
                         self._logger.debug(f'Closing connection with channel {channelId}')
                         PikaTools.SafeCloseConnection(connection)
 
-    def StartAsync(self,
-                   consumers: int = 1,
-                   listenerQueue: str = None,
-                   listenerQueueSettings: dict = None,
-                   topicExchange: str = None,
-                   topicExchangeSettings: dict = None,
-                   directExchange: str = None,
-                   directExchangeSettings: dict = None,
-                   subscriptions: Union[List[str], str] = None,
-                   confirmDelivery: bool = None,
-                   prefetchSize: int = None,
-                   prefetchCount: int = None,
-                   loop: asyncio.AbstractEventLoop = None,
-                   executor: ThreadPoolExecutor = None):
+    def StartConsumers(self,
+                       consumerCount: int = None,
+                       listenerQueue: str = None,
+                       listenerQueueSettings: dict = None,
+                       topicExchange: str = None,
+                       topicExchangeSettings: dict = None,
+                       directExchange: str = None,
+                       directExchangeSettings: dict = None,
+                       subscriptions: Union[List[str], str] = None,
+                       confirmDelivery: bool = None,
+                       prefetchSize: int = None,
+                       prefetchCount: int = None,
+                       loop: asyncio.AbstractEventLoop = None,
+                       executor: ThreadPoolExecutor = None):
         listenerQueue, listenerQueueSettings = self._AssertListenerQueueIsSet(listenerQueue, listenerQueueSettings)
+        if consumerCount is None:
+            consumerCount = self._defaultConsumerCount
         if loop is None:
             loop = asyncio.get_event_loop()
         tasks = []
-        for i in range(consumers):
+        for i in range(consumerCount):
             func = functools.partial(self._StartConsumerWithRetryHandler,
                                      listenerQueue=listenerQueue,
                                      listenerQueueSettings=listenerQueueSettings,
@@ -276,6 +279,22 @@ class PikaBusSetup(AbstractPikaBusSetup):
         self._allConsumingTasks += tasks
 
         return tasks
+
+    def StopConsumers(self,
+                      consumingTasks: List[asyncio.Future] = None,
+                      loop: asyncio.AbstractEventLoop = None):
+        self.Stop()
+        self.LoopForever(consumingTasks=consumingTasks,
+                         loop=loop)
+
+    def LoopForever(self,
+                    consumingTasks: List[asyncio.Future] = None,
+                    loop: asyncio.AbstractEventLoop = None):
+        if consumingTasks is None:
+            consumingTasks = self._allConsumingTasks
+        if loop is None:
+            loop = asyncio.get_event_loop()
+        return loop.run_until_complete(asyncio.gather(*consumingTasks))
 
     def CreateBus(self,
                   listenerQueue: str = None,
@@ -306,16 +325,6 @@ class PikaBusSetup(AbstractPikaBusSetup):
 
     def AddMessageHandler(self, messageHandler: Union[AbstractPikaMessageHandler, Callable]):
         self._messageHandlers.append(messageHandler)
-
-    def StopConsumers(self,
-                      consumingTasks: List[asyncio.Future] = None,
-                      loop: asyncio.AbstractEventLoop = None):
-        self.Stop()
-        if consumingTasks is None:
-            consumingTasks = self._allConsumingTasks
-        if loop is None:
-            loop = asyncio.get_event_loop()
-        return loop.run_until_complete(asyncio.gather(*consumingTasks))
 
     def HealthCheck(self,
                     channelId: str = None):
