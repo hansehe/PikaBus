@@ -130,6 +130,7 @@ class PikaBus(AbstractPikaBus):
 
     def CommitTransaction(self):
         PikaOutgoing.SendOrPublishOutgoingMessages(self._data)
+        self._data[PikaConstants.DATA_KEY_OUTGOING_MESSAGES] = []
         self._transaction = False
 
     def _SafeGetQueue(self, queue: str):
