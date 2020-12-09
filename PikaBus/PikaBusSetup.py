@@ -38,7 +38,7 @@ class PikaBusSetup(AbstractPikaBusSetup):
                  pikaErrorHandler: AbstractPikaErrorHandler = None,
                  pikaBusCreateMethod: Callable = None,
                  retryParams: dict = None,
-                 registerStopConsumersMethodAtExit: bool = True,
+                 registerStopConsumersMethodAtExit: bool = False,
                  logger=logging.getLogger(__name__)):
         """
         :param pika.ConnectionParameters connParams: Pika connection parameters.
@@ -106,7 +106,8 @@ class PikaBusSetup(AbstractPikaBusSetup):
         self._logger = logger
 
         if registerStopConsumersMethodAtExit:
-            atexit.register(self.StopConsumers)
+            loop = asyncio.get_event_loop()
+            atexit.register(self.StopConsumers, loop=loop)
 
     def __del__(self):
         self.Stop()
