@@ -30,8 +30,9 @@ async def run_blocking_tasks(executor):
 
     log.info('creating executor tasks')
     loop = asyncio.get_event_loop()
-    dummy = DummyClass(loop=loop)
-    dummy = {'test': 123, 'test2': {'lol': ''}}
+    dummyClass = DummyClass(loop=loop)
+    dummyClass = ''
+    dummy = {'test': 123, 'test2': {'lol': dummyClass}}
     blocking_tasks = []
     for i in range(6):
         func = functools.partial(blocks, i, dummy)
@@ -57,9 +58,9 @@ if __name__ == '__main__':
     executor = concurrent.futures.ThreadPoolExecutor(
         max_workers=3,
     )
-    # executor = concurrent.futures.ProcessPoolExecutor(
-    #     max_workers=3,
-    # )
+    executor = concurrent.futures.ProcessPoolExecutor(
+        max_workers=3,
+    )
 
     event_loop = asyncio.get_event_loop()
     try:
