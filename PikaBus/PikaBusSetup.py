@@ -39,6 +39,7 @@ class PikaBusSetup(AbstractPikaBusSetup):
                  pikaBusCreateMethod: Callable = None,
                  retryParams: dict = None,
                  registerStopConsumersMethodAtExit: bool = False,
+                 maxWorkerThreads: int = None,
                  logger=logging.getLogger(__name__)):
         """
         :param pika.ConnectionParameters connParams: Pika connection parameters.
@@ -59,6 +60,7 @@ class PikaBusSetup(AbstractPikaBusSetup):
         :param def pikaBusCreateMethod: Optional pikaBus creator method which returns an instance of AbstractPikaBus.
         :param dict retryParams: A set of retry parameters. See options below in code.
         :param bool registerStopConsumersMethodAtExit: Automatically stop all consumers when application stops.
+        :param int maxWorkerThreads: Max number of worker threads. Default is min(32, os.cpu_count() + 4), which preserves at least 5 workers for I/0 bound tasks.
         :param logging logger: Logging object
         """
         if defaultSubscriptions is None:
@@ -105,6 +107,7 @@ class PikaBusSetup(AbstractPikaBusSetup):
         self._allConsumingTasks = []
         self._logger = logger
         self._connectionHeartbeatIsRunning = False
+        self._defaultExecutor = ThreadPoolExecutor(max_workers=maxWorkerThreads)
 
         if registerStopConsumersMethodAtExit:
             loop = asyncio.get_event_loop()
@@ -162,6 +165,8 @@ class PikaBusSetup(AbstractPikaBusSetup):
               prefetchCount: int = None,
               loop: asyncio.AbstractEventLoop = None,
               executor: ThreadPoolExecutor = None):
+        if executor is None:
+            executor = self._defaultExecutor
         if loop is None:
             loop = asyncio.get_event_loop()
         if prefetchSize is None:
@@ -193,10 +198,11 @@ class PikaBusSetup(AbstractPikaBusSetup):
             self._openConnections[channelId] = connection
             self._logger.info(f'Starting new consumer channel with id {channelId} '
                               f'and {len(self.channels)} ongoing channels.')
-            heartbeatFunc = functools.partial(self._ConnectionHeartbeat)
-            connectionHeartbeatTask = loop.run_in_executor(executor, heartbeatFunc)
-            futureConnectionHeartbeatTask = asyncio.ensure_future(connectionHeartbeatTask, loop=loop)
-            self._allConsumingTasks += [futureConnectionHeartbeatTask]
+            if not self._connectionHeartbeatIsRunning:
+                heartbeatFunc = functools.partial(self._ConnectionHeartbeat)
+                connectionHeartbeatTask = loop.run_in_executor(executor, heartbeatFunc)
+                futureConnectionHeartbeatTask = asyncio.ensure_future(connectionHeartbeatTask, loop=loop)
+                self._allConsumingTasks += [futureConnectionHeartbeatTask]
             try:
                 channel.start_consuming()
             except Exception as exception:
@@ -252,6 +258,8 @@ class PikaBusSetup(AbstractPikaBusSetup):
                        prefetchCount: int = None,
                        loop: asyncio.AbstractEventLoop = None,
                        executor: ThreadPoolExecutor = None):
+        if executor is None:
+            executor = self._defaultExecutor
         listenerQueue, listenerQueueSettings = self._AssertListenerQueueIsSet(listenerQueue, listenerQueueSettings)
         if consumerCount is None:
             consumerCount = self._defaultConsumerCount
