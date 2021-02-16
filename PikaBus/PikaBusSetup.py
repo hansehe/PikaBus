@@ -9,7 +9,7 @@ import logging
 from typing import Union, Callable, List
 from concurrent.futures import ThreadPoolExecutor
 import functools
-import atexit
+import threading
 from PikaBus.abstractions.AbstractPikaBusSetup import AbstractPikaBusSetup
 from PikaBus.abstractions.AbstractPikaSerializer import AbstractPikaSerializer
 from PikaBus.abstractions.AbstractPikaProperties import AbstractPikaProperties
@@ -38,7 +38,7 @@ class PikaBusSetup(AbstractPikaBusSetup):
                  pikaErrorHandler: AbstractPikaErrorHandler = None,
                  pikaBusCreateMethod: Callable = None,
                  retryParams: dict = None,
-                 registerStopConsumersMethodAtExit: bool = False,
+                 stopConsumersAtExit: bool = True,
                  maxWorkerThreads: int = None,
                  logger=logging.getLogger(__name__)):
         """
@@ -59,7 +59,7 @@ class PikaBusSetup(AbstractPikaBusSetup):
         :param AbstractPikaErrorHandler pikaErrorHandler: Optional error handler override.
         :param def pikaBusCreateMethod: Optional pikaBus creator method which returns an instance of AbstractPikaBus.
         :param dict retryParams: A set of retry parameters. See options below in code.
-        :param bool registerStopConsumersMethodAtExit: Automatically stop all consumers when application stops.
+        :param bool stopConsumersAtExit: Automatically stop all consumers when application (main thread) stops.
         :param int maxWorkerThreads: Max number of worker threads. Default is min(32, os.cpu_count() + 4), which preserves at least 5 workers for I/0 bound tasks.
         :param logging logger: Logging object
         """
@@ -108,10 +108,7 @@ class PikaBusSetup(AbstractPikaBusSetup):
         self._logger = logger
         self._connectionHeartbeatIsRunning = False
         self._defaultExecutor = ThreadPoolExecutor(max_workers=maxWorkerThreads)
-
-        if registerStopConsumersMethodAtExit:
-            loop = asyncio.get_event_loop()
-            atexit.register(self.StopConsumers, loop=loop)
+        self._stopConsumersAtExit = stopConsumersAtExit
 
     def __del__(self):
         self.Stop()
@@ -302,7 +299,9 @@ class PikaBusSetup(AbstractPikaBusSetup):
             consumingTasks = self._allConsumingTasks
         if loop is None:
             loop = asyncio.get_event_loop()
-        return loop.run_until_complete(asyncio.gather(*consumingTasks))
+        result = loop.run_until_complete(asyncio.gather(*consumingTasks))
+        self._defaultExecutor.shutdown(wait=True, cancel_futures=True)
+        return result
 
     def CreateBus(self,
                   listenerQueue: str = None,
@@ -545,7 +544,10 @@ class PikaBusSetup(AbstractPikaBusSetup):
                                                                     channelId,
                                                                     heartbeatInterval,
                                                                     nextHeartbeats.get(channelId, -1))
-                time.sleep(min(heartbeatInterval, 10))
+                time.sleep(min(heartbeatInterval, 3))
+                if self._stopConsumersAtExit and not threading.main_thread().is_alive():
+                    self.Stop()
+                    break
             self._logger.debug(f'Stopped heartbeat task.')
         finally:
             self._connectionHeartbeatIsRunning = False
