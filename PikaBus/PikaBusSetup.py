@@ -300,7 +300,7 @@ class PikaBusSetup(AbstractPikaBusSetup):
         if loop is None:
             loop = asyncio.get_event_loop()
         result = loop.run_until_complete(asyncio.gather(*consumingTasks))
-        self._defaultExecutor.shutdown(wait=True, cancel_futures=True)
+        self._defaultExecutor.shutdown(wait=True)
         return result
 
     def CreateBus(self,
