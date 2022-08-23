@@ -1,6 +1,7 @@
 import pika
 from PikaBus.abstractions.AbstractPikaBus import AbstractPikaBus
 from PikaBus.PikaBusSetup import PikaBusSetup
+from PikaBus.PikaErrorHandler import PikaErrorHandler
 
 
 def MessageHandlerMethod(**kwargs):
@@ -26,9 +27,11 @@ connParams = pika.ConnectionParameters(
     credentials=credentials)
 
 # Create a PikaBusSetup instance with a listener queue, and add the message handler method.
+pikaErrorHandler = PikaErrorHandler(errorQueue='error', maxRetries=1)
 pikaBusSetup = PikaBusSetup(connParams,
                             defaultListenerQueue='myQueue',
-                            defaultSubscriptions='myTopic')
+                            defaultSubscriptions='myTopic',
+                            pikaErrorHandler=pikaErrorHandler)
 pikaBusSetup.AddMessageHandler(MessageHandlerMethod)
 
 # Start consuming messages from the queue.
