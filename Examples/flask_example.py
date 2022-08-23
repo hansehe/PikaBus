@@ -32,8 +32,8 @@ connParams = pika.ConnectionParameters(
 
 # Create a PikaBusSetup instance with a listener queue, and add the message handler method.
 pikaBusSetup = PikaBusSetup(connParams,
-                            defaultListenerQueue='myQueue',
-                            defaultSubscriptions='myTopic')
+                            defaultListenerQueue='myFlaskQueue',
+                            defaultSubscriptions='myFlaskTopic')
 pikaBusSetup.AddMessageHandler(MessageHandlerMethod)
 
 # Start consuming messages from the queue
@@ -46,10 +46,11 @@ app = Flask(__name__)
 # Create an api route that simply publishes a message
 @app.route('/')
 def Publish():
-    bus = pikaBusSetup.CreateBus()
-    payload = {'hello': 'world!', 'reply': True}
-    bus.Publish(payload=payload, topic='myTopic')
-    return 'Payload published :D'
+    with pikaBusSetup.CreateBus() as bus:
+        bus: AbstractPikaBus = bus
+        payload = {'hello': 'world!', 'reply': True}
+        bus.Publish(payload=payload, topic='myTopic')
+        return 'Payload published :D'
 
 
 # Run flask app on http://localhost:5005/
