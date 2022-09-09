@@ -130,7 +130,7 @@ class PikaProperties(AbstractPikaProperties):
         exception = outgoingMessage.get(PikaConstants.DATA_KEY_EXCEPTION, None)
         if exception is not None:
             errorDetails = ''.join(traceback.format_exception(type(exception), exception, exception.__traceback__))
-            headers.setdefault(self.errorDetailsHeaderKey, errorDetails)
+            headers[self.errorDetailsHeaderKey] = errorDetails
             if data[PikaConstants.DATA_KEY_LISTENER_QUEUE] is not None:
                 headers.setdefault(self.sourceQueueHeaderKey, data[PikaConstants.DATA_KEY_LISTENER_QUEUE])
 
