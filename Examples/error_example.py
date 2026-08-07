@@ -1,47 +1,39 @@
-import pika
+import asyncio
 from PikaBus.abstractions.AbstractPikaBus import AbstractPikaBus
 from PikaBus.PikaBusSetup import PikaBusSetup
 from PikaBus.PikaErrorHandler import PikaErrorHandler
 
 
-def failingMessageHandlerMethod(**kwargs):
+async def FailingMessageHandlerMethod(**kwargs):
     """
-    This message handler fails every time for some dumb reason ..
+    A handler that always fails, to show the retry and dead-letter path.
+
+    PikaErrorHandler retries with a backoff by stamping a deferred time on the message. In 2.0 that
+    wait actually happens - 1.x republished the message in a tight loop with no delay at all, so a
+    one second backoff cost thousands of broker round trips.
     """
-    data: dict = kwargs['data']
-    bus: AbstractPikaBus = kwargs['bus']
     payload: dict = kwargs['payload']
-    print(payload)
-    raise Exception("I'm just failing as I'm told ..")
+    print(f'Failing message on purpose: {payload}')
+    raise Exception('Failing message as I am told!')
 
 
-# Use pika connection params to set connection details
-credentials = pika.PlainCredentials('amqp', 'amqp')
-connParams = pika.ConnectionParameters(
-    host='localhost',
-    port=5672,
-    virtual_host='/',
-    credentials=credentials)
-
-# Create a PikaBusSetup instance with a listener queue and your own PikaErrorHandler definition.
-pikaErrorHandler = PikaErrorHandler(errorQueue='error', maxRetries=1)
-pikaBusSetup = PikaBusSetup(connParams,
+async def Main():
+    # After maxRetries the message is moved to the error queue, which PikaBus declares and binds.
+    pikaErrorHandler = PikaErrorHandler(errorQueue='error', maxRetries=2, delay=1, backoff=2)
+    async with PikaBusSetup('amqp://amqp:amqp@localhost:5672/',
                             defaultListenerQueue='myFailingQueue',
-                            pikaErrorHandler=pikaErrorHandler)
-pikaBusSetup.AddMessageHandler(failingMessageHandlerMethod)
+                            pikaErrorHandler=pikaErrorHandler) as pikaBusSetup:
+        pikaBusSetup.AddMessageHandler(FailingMessageHandlerMethod)
+        await pikaBusSetup.Init()
+        await pikaBusSetup.StartConsumers()
 
-# Start consuming messages from the queue.
-pikaBusSetup.Init()
-pikaBusSetup.StartConsumers()
+        async with pikaBusSetup.CreateBus() as bus:
+            await bus.Send(payload={'hello': 'world!'}, queue='myFailingQueue')
 
-# Create a temporary bus to subscribe on topics and send, defer or publish messages.
-bus = pikaBusSetup.CreateBus()
-payload = {'hello': 'world!', 'reply': True}
+        print('Watch the message retry with a growing backoff, then land in the error queue.')
+        await asyncio.to_thread(input, 'Hit enter to stop all consuming channels \n\n')
+        await pikaBusSetup.StopConsumers()
 
-# To send a message means sending a message explicitly to one receiver.
-# In this case the message will keep failing and end up in an dead-letter queue called `error`.
-# Locate the failed message in the `error` queue at the RabbitMq admin portal on http://localhost:15672 (user=amqp, password=amqp)
-bus.Send(payload=payload, queue='myFailingQueue')
 
-input('Hit enter to stop all consuming channels \n\n')
-pikaBusSetup.StopConsumers()
+if __name__ == '__main__':
+    asyncio.run(Main())

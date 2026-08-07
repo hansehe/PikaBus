@@ -5,6 +5,7 @@ DATA_KEY_DIRECT_EXCHANGE = 'directExchange'
 DATA_KEY_TOPIC_EXCHANGE = 'topicExchange'
 DATA_KEY_CONNECTION = 'connection'
 DATA_KEY_CHANNEL = 'channel'
+DATA_KEY_CHANNEL_ID = 'channelId'
 DATA_KEY_BUS = 'bus'
 DATA_KEY_MESSAGE_HANDLERS = 'messageHandlers'
 DATA_KEY_SERIALIZER = 'serializer'
@@ -13,6 +14,12 @@ DATA_KEY_PROPERTY_BUILDER = 'propertyBuilder'
 DATA_KEY_INCOMING_MESSAGE = 'incomingMessage'
 DATA_KEY_OUTGOING_MESSAGES = 'outgoingMessages'
 DATA_KEY_LOGGER = 'logger'
+DATA_KEY_MAX_DEFERRED_SLEEP = 'maxDeferredSleep'
+
+# An awaitable (channel, exchange, queue) -> None that binds a command destination to the direct
+# exchange at most once per channel. Replaces the per-send queue_bind of PikaBus 1.x.
+# None disables auto-binding, in which case destinations must be bound by whoever declares them.
+DATA_KEY_BIND_CACHE = 'bindCache'
 
 DATA_KEY_BODY = 'body'
 DATA_KEY_PAYLOAD = 'payload'
@@ -26,7 +33,15 @@ DATA_KEY_CONTENT_TYPE = 'contentType'
 DATA_KEY_CONTENT_ENCODING = 'contentEncoding'
 DATA_KEY_EXCEPTION = 'exception'
 DATA_KEY_MESSAGE_TYPE = 'messageType'
-DATA_KEY_METHOD_FRAME = 'methodFrame'
+
+# The aio_pika.abc.AbstractIncomingMessage of an incoming delivery.
+# Replaces the pika `methodFrame` / `headerFrame` pair from PikaBus 1.x, which no longer exist.
+# Read incoming headers with data[DATA_KEY_INCOMING_MESSAGE][DATA_KEY_HEADERS].
+DATA_KEY_MESSAGE = 'message'
+
+# Deprecated. Kept only so PikaBus 1.x message handlers reading
+# data[DATA_KEY_INCOMING_MESSAGE][DATA_KEY_HEADER_FRAME].headers keep working for one release.
+# It resolves to a shim that warns on access. Use DATA_KEY_HEADERS instead.
 DATA_KEY_HEADER_FRAME = 'headerFrame'
 
 HEADER_KEY_MESSAGE_ID = 'MessageId'
@@ -42,4 +57,3 @@ HEADER_KEY_ERROR_DETAILS = 'ErrorDetails'
 HEADER_KEY_SOURCE_QUEUE = 'SourceQueue'
 HEADER_KEY_ERROR_RETRIES = 'ErrorRetries'
 HEADER_KEY_DEFERRED_TIME = 'DeferredTime'
-

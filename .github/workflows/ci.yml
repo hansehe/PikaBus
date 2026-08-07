@@ -1,0 +1,93 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+    tags: ['v*']
+  pull_request:
+    branches: [master]
+
+env:
+  # Fail rather than silently resolving something other than uv.lock.
+  UV_FROZEN: "1"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # aio-pika 10.x requires Python >= 3.11, which sets the floor for PikaBus 2.0.
+        python-version: ['3.11', '3.12', '3.13']
+
+    services:
+      rabbitmq:
+        image: rabbitmq:4-management
+        env:
+          RABBITMQ_DEFAULT_USER: amqp
+          RABBITMQ_DEFAULT_PASS: amqp
+        ports:
+          - 5672:5672
+        options: >-
+          --health-cmd "rabbitmq-diagnostics -q check_running"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Install
+        # uv provisions the interpreter itself, so no separate setup-python step is needed.
+        run: uv sync --locked --python ${{ matrix.python-version }}
+
+      - name: Test
+        env:
+          # A service container is reachable on localhost for jobs running directly on the runner.
+          PIKABUS_TEST_AMQP_URL: amqp://amqp:amqp@localhost:5672/
+        run: uv run --no-sync python -m unittest discover -p "*Test*.py" -v
+
+  build:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Build
+        run: uv build
+
+      - name: Check metadata
+        run: uv run --group build --no-project twine check dist/*
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    runs-on: ubuntu-latest
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    environment: pypi
+    permissions:
+      # Trusted Publishing, so no PyPI token needs to live in repository secrets.
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - uses: pypa/gh-action-pypi-publish@release/v1

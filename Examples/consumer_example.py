@@ -1,12 +1,12 @@
-import pika
+import asyncio
 from PikaBus.abstractions.AbstractPikaBus import AbstractPikaBus
 from PikaBus.PikaBusSetup import PikaBusSetup
 from PikaBus.PikaErrorHandler import PikaErrorHandler
 
 
-def MessageHandlerMethod(**kwargs):
+async def MessageHandlerMethod(**kwargs):
     """
-    A message handler method may simply be a method with som **kwargs.
+    A message handler method may simply be a method with some **kwargs.
     The **kwargs will be given all incoming pipeline data, the bus and the incoming payload.
     """
     data: dict = kwargs['data']
@@ -15,27 +15,22 @@ def MessageHandlerMethod(**kwargs):
     print(payload)
     if payload['reply']:
         payload['reply'] = False
-        bus.Reply(payload=payload)
+        await bus.Reply(payload=payload)
 
 
-# Use pika connection params to set connection details
-credentials = pika.PlainCredentials('amqp', 'amqp')
-connParams = pika.ConnectionParameters(
-    host='localhost',
-    port=5672,
-    virtual_host='/',
-    credentials=credentials)
-
-# Create a PikaBusSetup instance with a listener queue, and add the message handler method.
-pikaErrorHandler = PikaErrorHandler(errorQueue='error', maxRetries=1)
-pikaBusSetup = PikaBusSetup(connParams,
+async def Main():
+    pikaErrorHandler = PikaErrorHandler(errorQueue='error', maxRetries=1)
+    async with PikaBusSetup('amqp://amqp:amqp@localhost:5672/',
                             defaultListenerQueue='myQueue',
                             defaultSubscriptions='myTopic',
-                            pikaErrorHandler=pikaErrorHandler)
-pikaBusSetup.AddMessageHandler(MessageHandlerMethod)
+                            pikaErrorHandler=pikaErrorHandler) as pikaBusSetup:
+        pikaBusSetup.AddMessageHandler(MessageHandlerMethod)
+        await pikaBusSetup.StartConsumers()
 
-# Start consuming messages from the queue.
-pikaBusSetup.StartConsumers()
+        # Await the consumers until they stop. SIGINT and SIGTERM stop them gracefully, letting
+        # in-flight messages finish and acknowledge first.
+        await pikaBusSetup.WaitUntilStopped()
 
-input('Hit enter to stop all consuming channels \n\n')
-pikaBusSetup.StopConsumers()
+
+if __name__ == '__main__':
+    asyncio.run(Main())

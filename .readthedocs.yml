@@ -16,8 +16,13 @@ sphinx:
 # Optionally build your docs in additional formats such as PDF and ePub
 formats: all
 
-# Optionally set the version of Python and requirements required to build your docs
+# The build environment. The old `python.version` key was removed by Read the Docs.
+build:
+  os: ubuntu-24.04
+  tools:
+    python: "3.12"
+
+# Optionally set the requirements required to build your docs
 python:
-  version: 3.7
   install:
     - requirements: docs/requirements.txt

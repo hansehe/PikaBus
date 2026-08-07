@@ -20,6 +20,11 @@ A direct exchange matches the whole topic with subscribing queues. Thus it is us
 The default `direct exchange` used by PikaBus is named:
 - `PikaBusDirect`
 
+PikaBus binds a queue to the direct exchange, with the queue's own name as the routing key, when it
+declares the queue - in `Init()` or `StartConsumers()`. That is what makes a queue addressable with
+`Send()`. Destinations PikaBus did not declare, such as the `ReplyToAddress` of an incoming message
+from another service, are bound on first use and cached per channel.
+
 ### Topic Exchanges
 A topic exchange matches parts or more of the topic with subscribing queues. Thus it is used to publish a message with the `event` pattern to potentially many receiver, as a `one-to-many` exchange.
 

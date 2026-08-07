@@ -1,22 +1,47 @@
+import asyncio
+
+import aio_pika
+
 from PikaBus.abstractions.AbstractPikaSerializer import AbstractPikaSerializer
 from PikaBus.abstractions.AbstractPikaProperties import AbstractPikaProperties
 from PikaBus.tools import PikaConstants, PikaTools
-import pika
 
 
-def ResendMessage(data: dict,
-                  intent: str = PikaConstants.INTENT_COMMAND,
-                  destinationQueue: str = None,
-                  body: bytes = None,
-                  headers: dict = None,
-                  exchange: str = None,
-                  exception: Exception = None):
+class PikaBusTransactionError(Exception):
+    """
+    Raised when a transaction flush could not publish every outgoing message.
+
+    PikaBus transactions are an in-memory outbox, not an AMQP transaction, so a flush is not atomic:
+    some messages may already be on the broker when a later one fails. This exception reports exactly
+    which ones, instead of leaving it implicit.
+    """
+
+    def __init__(self, published: list, failed: list):
+        self.published = published
+        self.failed = failed
+        firstError = failed[0][1] if failed else None
+        super().__init__(
+            f'Failed publishing {len(failed)} of {len(published) + len(failed)} outgoing messages. '
+            f'{len(published)} were published and cannot be un-published. First error - '
+            f'{str(type(firstError))}: {str(firstError)}')
+
+
+async def ResendMessage(data: dict,
+                        intent: str = PikaConstants.INTENT_COMMAND,
+                        destinationQueue: str = None,
+                        body: bytes = None,
+                        headers: dict = None,
+                        exchange: str = None,
+                        exception: Exception = None):
+    incomingMessage = data[PikaConstants.DATA_KEY_INCOMING_MESSAGE]
     if destinationQueue is None:
         destinationQueue: str = data[PikaConstants.DATA_KEY_LISTENER_QUEUE]
     if body is None:
-        body = data[PikaConstants.DATA_KEY_INCOMING_MESSAGE][PikaConstants.DATA_KEY_BODY]
+        body = incomingMessage[PikaConstants.DATA_KEY_BODY]
     if headers is None:
-        headers = data[PikaConstants.DATA_KEY_INCOMING_MESSAGE][PikaConstants.DATA_KEY_HEADER_FRAME].headers
+        # dict(...) rather than the live header dict. PikaBus 1.x passed the incoming pika header
+        # frame's own dict here and mutated it in place, which only worked by accident.
+        headers = dict(incomingMessage.get(PikaConstants.DATA_KEY_HEADERS, None) or {})
     outgoingMessage = GetOutgoingMessage(data, destinationQueue,
                                          intent=intent,
                                          headers=headers,
@@ -25,41 +50,67 @@ def ResendMessage(data: dict,
 
     outgoingMessage[PikaConstants.DATA_KEY_BODY] = body
     outgoingMessage[PikaConstants.DATA_KEY_CONTENT_TYPE] = None
-    SendOrPublishOutgoingMessage(data, outgoingMessage)
+    await SendOrPublishOutgoingMessage(data, outgoingMessage)
 
 
-def SendOrPublishOutgoingMessages(data: dict):
+async def SendOrPublishOutgoingMessages(data: dict):
+    """
+    Flush the outbox.
+
+    All messages are published concurrently and gathered, so the whole flush costs one round trip
+    instead of N. If any publish fails, PikaBusTransactionError reports which succeeded and which
+    did not - PikaBus 1.x published sequentially and simply stopped at the first failure, leaving
+    the remaining messages silently unsent and the outbox uncleared.
+    """
     outgoingMessages = data[PikaConstants.DATA_KEY_OUTGOING_MESSAGES]
-    for outgoingMessage in outgoingMessages:
-        SendOrPublishOutgoingMessage(data, outgoingMessage)
+    if not outgoingMessages:
+        return
+    results = await asyncio.gather(
+        *[SendOrPublishOutgoingMessage(data, outgoingMessage) for outgoingMessage in outgoingMessages],
+        return_exceptions=True)
+    published, failed = [], []
+    for outgoingMessage, result in zip(outgoingMessages, results):
+        if isinstance(result, BaseException):
+            failed.append((outgoingMessage, result))
+        else:
+            published.append(outgoingMessage)
+    if failed:
+        raise PikaBusTransactionError(published, failed)
 
 
-def SendOrPublishOutgoingMessage(data: dict, outgoingMessage: dict):
+async def SendOrPublishOutgoingMessage(data: dict, outgoingMessage: dict):
     logger = data[PikaConstants.DATA_KEY_LOGGER]
-    channel: pika.adapters.blocking_connection.BlockingChannel = data[PikaConstants.DATA_KEY_CHANNEL]
+    channel: aio_pika.abc.AbstractChannel = data[PikaConstants.DATA_KEY_CHANNEL]
     propertyBuilder: AbstractPikaProperties = data[PikaConstants.DATA_KEY_PROPERTY_BUILDER]
-    properties = propertyBuilder.GetPikaProperties(data, outgoingMessage)
-    exchange = outgoingMessage[PikaConstants.DATA_KEY_EXCHANGE]
+    message: aio_pika.Message = propertyBuilder.GetPikaProperties(data, outgoingMessage)
+    exchangeName = outgoingMessage[PikaConstants.DATA_KEY_EXCHANGE]
     topicOrQueue = outgoingMessage[PikaConstants.DATA_KEY_TOPIC]
-    body = outgoingMessage[PikaConstants.DATA_KEY_BODY]
     intent = outgoingMessage[PikaConstants.DATA_KEY_INTENT]
     mandatory = outgoingMessage[PikaConstants.DATA_KEY_MANDATORY_DELIVERY]
+
     if intent == PikaConstants.INTENT_EVENT:
-        if exchange is None:
-            exchange = data[PikaConstants.DATA_KEY_TOPIC_EXCHANGE]
-        PikaTools.BasicPublish(channel, exchange, topicOrQueue, body,
-                               properties=properties,
-                               mandatory=mandatory)
+        if exchangeName is None:
+            exchangeName = data[PikaConstants.DATA_KEY_TOPIC_EXCHANGE]
     elif intent == PikaConstants.INTENT_COMMAND:
-        if exchange is None:
-            exchange = data[PikaConstants.DATA_KEY_DIRECT_EXCHANGE]
-        PikaTools.BasicSend(channel, exchange, topicOrQueue, body,
-                            properties=properties,
-                            mandatory=mandatory)
+        if exchangeName is None:
+            exchangeName = data[PikaConstants.DATA_KEY_DIRECT_EXCHANGE]
     else:
         msg = f'Outgoing type {intent} is not implemented!'
         logger.error(msg)
         raise Exception(msg)
+
+    # ensure=False gets a publishable exchange handle with no passive declare round trip.
+    exchange = await channel.get_exchange(exchangeName, ensure=False)
+
+    if intent == PikaConstants.INTENT_COMMAND:
+        # A command routes through the direct exchange on the destination queue's own name, so that
+        # binding has to exist. PikaBus 1.x re-created it on every single send; the bind cache does
+        # it once per destination per channel instead.
+        binder = data.get(PikaConstants.DATA_KEY_BIND_CACHE, None)
+        if binder is not None:
+            await binder(channel, exchangeName, topicOrQueue)
+
+    await PikaTools.BasicPublish(exchange, topicOrQueue, message, mandatory=mandatory)
 
 
 def AppendOutgoingMessage(data: dict, payload: dict, topicOrQueue: str,

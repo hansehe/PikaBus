@@ -2,12 +2,15 @@ build:
     selections:
         install-dep:
             cmd:
-                - pip install -r requirements.txt
-                - pip install twine wheel
+                # uv resolves, creates the environment and installs the project in one step,
+                # pinned to uv.lock. --locked fails if the lockfile is stale.
+                - uv sync --locked
         python:
             cmd:
-                - python setup.py bdist_wheel
-                - twine check dist/*
+                # `uv build`, not `setup.py bdist_wheel`: direct setup.py invocation is deprecated,
+                # and there is no setup.py any more - metadata lives in pyproject.toml.
+                - uv build
+                - uv run --group build --no-project twine check dist/*
         docs:
             files:
                 - docker-compose.docs.yml
@@ -22,7 +25,7 @@ test:
     selections:
         python:
             cmd:
-                - python -m unittest discover -p *Test*.py
+                - uv run python -m unittest discover -p "*Test*.py"
         container:
             files:
                 - docker-compose.test.yml
@@ -31,7 +34,7 @@ publish:
     selections:
         python:
             cmd:
-                - twine upload dist/*
+                - uv publish
 
 swarm:
     selections:

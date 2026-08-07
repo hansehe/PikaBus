@@ -1,0 +1,79 @@
+[build-system]
+# setuptools stays the build backend - it is independent of uv, and anyone building the sdist with
+# plain pip needs nothing unusual. Declaring it here is what lets `uv build` and `pip install .`
+# create an isolated build environment and fetch it themselves, rather than relying on setuptools
+# happening to be preinstalled. It is not, in python:3.12+ images.
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "PikaBus"
+version = "2.0.0"
+description = "Asyncio amqp messaging bus for RabbitMq, built on aio-pika"
+readme = "README.rst"
+requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [
+    { name = "Hans Erik Heggem", email = "hans.erik.heggem@gmail.com" },
+]
+keywords = ["aio-pika", "asyncio", "RabbitMQ", "amqp"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+
+    "Intended Audience :: Developers",
+    "Topic :: Communications",
+    "Topic :: Internet",
+    "Topic :: Software Development :: Libraries",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: System :: Networking",
+
+    "Operating System :: MacOS",
+    "Operating System :: POSIX",
+    "Operating System :: Microsoft",
+
+    "Framework :: AsyncIO",
+
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
+dependencies = [
+    # aio-pika 10.x requires Python >=3.11, which sets requires-python above.
+    "aio-pika>=10,<11",
+]
+
+[project.urls]
+Documentation = "https://pikabus.readthedocs.org/"
+Source = "https://github.com/hansehe/PikaBus"
+
+# PEP 735 dependency groups. These are development-only and are never installed for consumers of the
+# published wheel, unlike optional-dependencies/extras.
+[dependency-groups]
+test = [
+    "coverage>=7",
+]
+docs = [
+    "sphinx",
+    "sphinx-autobuild",
+    "recommonmark",
+    "sphinx-markdown-tables",
+]
+build = [
+    "build",
+    "twine",
+]
+dev = [
+    { include-group = "test" },
+    { include-group = "docs" },
+    { include-group = "build" },
+]
+
+[tool.setuptools.packages.find]
+# Ship only the library. tests/, Examples/ and docs/ are deliberately excluded.
+include = ["PikaBus*"]
+
+[tool.uv]
+# The default group installed by a bare `uv sync`.
+default-groups = ["test"]

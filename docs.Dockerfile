@@ -1,4 +1,4 @@
-FROM python:3.8-buster as dev
+FROM python:3.13-slim as dev
 
 WORKDIR src
 

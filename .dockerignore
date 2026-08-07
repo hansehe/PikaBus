@@ -15,9 +15,13 @@ __pycache__/
 .vscode/
 .idea/
 venv/
+# Never copy a host virtualenv into the image - it would shadow the one uv builds inside.
+.venv/
 _build/
 docker-compose.build.*.yml
 docker-compose.publish.*.yml
 docker-compose.test.*.yml
 docker-compose.run.*.yml
 docker-compose.digest*.yml
+
+.git/
