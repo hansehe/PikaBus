@@ -73,7 +73,7 @@ To build by hand:
 
 1. Bump ``version`` under ``[project]`` in ``pyproject.toml``.
 2. Package: ``uv build``
-3. Check: ``uv run --group build --no-project twine check dist/*``
+3. Check: ``uv run --no-project --with twine twine check dist/*``
 4. Publish: ``uv publish``
 5. Or with dbm:
 

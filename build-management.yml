@@ -10,7 +10,7 @@ build:
                 # `uv build`, not `setup.py bdist_wheel`: direct setup.py invocation is deprecated,
                 # and there is no setup.py any more - metadata lives in pyproject.toml.
                 - uv build
-                - uv run --group build --no-project twine check dist/*
+                - uv run --no-project --with twine twine check dist/*
         docs:
             files:
                 - docker-compose.docs.yml
