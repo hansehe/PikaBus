@@ -223,12 +223,12 @@ emits a ``DeprecationWarning`` and is removed in 2.1.
 Behaviour changes
 ~~~~~~~~~~~~~~~~~
 
-- **Deferred messages now really wait.** 1.x republished a not-yet-due message and acknowledged it
-  immediately, with no delay - so a ten second ``Defer`` cost thousands of broker round trips, and
-  every error-handler retry backoff did the same. 2.0 holds the message unacknowledged instead, in
-  hops of at most ``maxDeferredSleep`` (5 minutes by default). Nothing is lost if the process dies
-  mid-wait, since the message was never acknowledged. Note a waiting message occupies one prefetch
-  slot.
+- **Deferring is unchanged, and still costs a broker round trip per redelivery.** A not-yet-due
+  message is republished and acknowledged immediately, so it bounces off the broker until its
+  deferred time passes, and so does every error-handler retry backoff. It is deliberately not
+  awaited in-process: that would hold a prefetch and concurrency slot and stall every other message
+  on the queue behind the defer. For long delays prefer a broker-side mechanism - a per-message TTL
+  on a queue with ``x-dead-letter-exchange``, or the delayed message exchange plugin.
 - **``defaultPrefetchCount`` is 10, not 0.** In 1.x, 0 meant *unlimited*: one consumer would pull an
   entire backlog into memory. Raise it for throughput.
 - **``retryParams`` are honoured.** 1.x read only ``tries`` and reconnected in a tight loop with no

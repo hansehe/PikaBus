@@ -1,6 +1,5 @@
 import asyncio
 import atexit
-import datetime
 import functools
 import logging
 import random
@@ -74,7 +73,6 @@ class PikaBusSetup(AbstractPikaBusSetup):
                  defaultPrefetchCount: int = 10,
                  defaultConsumerCount: int = 1,
                  defaultConcurrency: int = 1,
-                 maxDeferredSleep: datetime.timedelta = datetime.timedelta(minutes=5),
                  gracePeriod: float = 30.0,
                  autoBindOnSend: bool = True,
                  pikaSerializer: AbstractPikaSerializer = None,
@@ -122,9 +120,6 @@ class PikaBusSetup(AbstractPikaBusSetup):
         :param int defaultConcurrency: Max concurrent message handler invocations per consumer.
             Default 1, i.e. serial, which is how 1.x behaved. Raise it only if your handlers are safe
             to run concurrently - doing so also gives up per-queue ordering.
-        :param datetime.timedelta maxDeferredSleep: Longest a deferred message waits in-process before
-            being handed back to the broker for another hop. Keep this well under RabbitMq's
-            consumer_timeout (30 minutes by default).
         :param float gracePeriod: Default seconds to let in-flight handlers finish when stopping.
         :param bool autoBindOnSend: Bind a command destination to the direct exchange the first time
             it is used on a channel. Needed for replies to queues this process did not declare.
@@ -193,7 +188,6 @@ class PikaBusSetup(AbstractPikaBusSetup):
         self._defaultPrefetchCount = defaultPrefetchCount
         self._defaultConsumerCount = defaultConsumerCount
         self._defaultConcurrency = defaultConcurrency
-        self._maxDeferredSleep = maxDeferredSleep.total_seconds()
         self._gracePeriod = gracePeriod
         self._autoBindOnSend = autoBindOnSend
         self._pikaSerializer = pikaSerializer
@@ -878,7 +872,6 @@ class PikaBusSetup(AbstractPikaBusSetup):
             PikaConstants.DATA_KEY_PROPERTY_BUILDER: self._pikaProperties,
             PikaConstants.DATA_KEY_ERROR_HANDLER: self._pikaErrorHandler,
             PikaConstants.DATA_KEY_LOGGER: self._logger,
-            PikaConstants.DATA_KEY_MAX_DEFERRED_SLEEP: self._maxDeferredSleep,
             PikaConstants.DATA_KEY_BIND_CACHE: binder,
             PikaConstants.DATA_KEY_OUTGOING_MESSAGES: []
         }

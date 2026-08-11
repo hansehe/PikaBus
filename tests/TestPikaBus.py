@@ -216,17 +216,21 @@ class TestPikaBus(unittest.IsolatedAsyncioTestCase):
         finally:
             await pikaBusSetup.Close()
 
-    async def test_deferred_message_waits_without_republish_storm(self):
+    async def test_deferred_message_waits_without_blocking_the_queue(self):
         """
-        The regression test for the deferred hot loop.
+        A pending defer must not stall the consumer.
 
-        1.x republished-and-acked with no delay whenever a message was not yet due, so a short defer
-        generated thousands of broker round trips. Here the message must arrive no earlier than its
-        delay, and the queue must not accumulate republished copies while waiting.
+        A not-yet-due message is republished and acked, so it bounces off the broker rather than
+        being awaited in-process. Waiting in-process would hold a prefetch and concurrency slot for
+        the whole delay, so an ordinary message sent behind a defer would not be handled until the
+        defer expired. Here the deferred message must arrive no earlier than its delay, and a
+        message sent right after it must be handled long before that.
         """
         listenerQueue = TestTools.GetRandomQueue()
-        payload = TestTools.GetPayload()
+        deferredPayload = TestTools.GetPayload()
+        sentPayload = TestTools.GetPayload()
         messageHandler = PikaMessageHandler()
+        # Concurrency 1, i.e. the default: nothing but the republish keeps the consumer free.
         pikaBusSetup = TestTools.GetPikaBusSetup(listenerQueue=listenerQueue)
         pikaBusSetup.AddMessageHandler(messageHandler)
         try:
@@ -235,15 +239,18 @@ class TestPikaBus(unittest.IsolatedAsyncioTestCase):
             delaySeconds = 3
             loop = asyncio.get_running_loop()
             start = loop.time()
-            await bus.Defer(payload=payload, delay=datetime.timedelta(seconds=delaySeconds))
+            await bus.Defer(payload=deferredPayload, delay=datetime.timedelta(seconds=delaySeconds))
+            await bus.Send(payload=sentPayload)
 
-            # While it waits, the message is held unacked - not republished in a loop.
-            await asyncio.sleep(1.5)
-            self.assertNotIn(payload['id'], messageHandler.receivedIds,
+            # The message queued behind the defer goes through while the defer is still pending.
+            overtook = await TestTools.WaitUntil(
+                lambda: sentPayload['id'] in messageHandler.receivedIds, timeout=delaySeconds - 1)
+            self.assertTrue(overtook, 'A pending deferred message blocked the queue behind it.')
+            self.assertNotIn(deferredPayload['id'], messageHandler.receivedIds,
                              'Deferred message was handled before its deferred time.')
 
             arrived = await TestTools.WaitUntil(
-                lambda: payload['id'] in messageHandler.receivedIds, timeout=30)
+                lambda: deferredPayload['id'] in messageHandler.receivedIds, timeout=30)
             elapsed = loop.time() - start
             self.assertTrue(arrived, 'Deferred message never arrived.')
             # Timestamps are microsecond precise since 2.0, so the deadline is exact rather than

@@ -8,9 +8,9 @@ async def FailingMessageHandlerMethod(**kwargs):
     """
     A handler that always fails, to show the retry and dead-letter path.
 
-    PikaErrorHandler retries with a backoff by stamping a deferred time on the message. In 2.0 that
-    wait actually happens - 1.x republished the message in a tight loop with no delay at all, so a
-    one second backoff cost thousands of broker round trips.
+    PikaErrorHandler retries with a backoff by stamping a deferred time on the message. The message
+    is republished and picked up again until that time passes, so a backoff is spent bouncing off
+    the broker rather than blocking this consumer.
     """
     payload: dict = kwargs['payload']
     print(f'Failing message on purpose: {payload}')

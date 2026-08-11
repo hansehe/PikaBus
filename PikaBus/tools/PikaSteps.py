@@ -42,18 +42,16 @@ async def TryHandleMessageInPipeline(pipelineIterator: iter, data: dict):
 
 async def CheckIfMessageIsDeferred(pipelineIterator: iter, data: dict):
     """
-    Hold a deferred message until its DeferredTime, then let the pipeline continue.
+    Republish a not-yet-due message back to its queue instead of letting the pipeline continue.
 
-    PikaBus 1.x republished-and-acked immediately whenever the message was not yet due, with no
-    delay at all - so a 10 second defer spun through republish/ack at broker round-trip speed, and
-    because PikaErrorHandler stamps DeferredTime for retry backoff, every retry did the same.
+    The message bounces off the broker until its DeferredTime has passed, as it did in 1.x. It is
+    deliberately not awaited in-process: this consumer runs at most `concurrency` handlers at a
+    time, so sleeping on a deferred message would hold both its prefetch slot and a concurrency
+    slot, and a single long defer would stall every other message on the queue behind it.
 
-    2.0 waits in-process instead, capped by maxDeferredSleep. The message is left unacked while
-    waiting, so a crash returns it to the broker - strictly better durability than 1.x, which had
-    already acked it. Defers longer than the cap take one broker hop per cap interval, which keeps
-    every unacked delivery well inside RabbitMQ's consumer_timeout (30 minutes by default).
-
-    Cost to be aware of: a sleeping message holds its prefetch slot for the duration.
+    The cost is one republish/ack round trip per redelivery, with nothing throttling the loop, so a
+    long defer is chatty. For long delays prefer a broker-side mechanism - a per-message TTL on a
+    queue with x-dead-letter-exchange, or the delayed message exchange plugin.
     """
     logger = data[PikaConstants.DATA_KEY_LOGGER]
     pikaProperties: AbstractPikaProperties = data[PikaConstants.DATA_KEY_PROPERTY_BUILDER]
@@ -67,16 +65,10 @@ async def CheckIfMessageIsDeferred(pipelineIterator: iter, data: dict):
         now = pikaProperties.StringToDatetime(pikaProperties.DatetimeToString())
         remaining = (deferredTime - now).total_seconds()
         if remaining > 0:
-            maxSleep: float = data[PikaConstants.DATA_KEY_MAX_DEFERRED_SLEEP]
-            sleepFor = min(remaining, maxSleep)
-            logger.debug(f'Deferring message for {sleepFor} of {remaining} remaining seconds.')
-            await asyncio.sleep(sleepFor)
-            if sleepFor < remaining:
-                # Still not due. Hand it back to the broker once, so the delivery never stays
-                # unacked long enough to trip consumer_timeout.
-                await PikaOutgoing.ResendMessage(data)
-                await PikaTools.SafeAcknowledgeMessage(message, logger=logger)
-                return
+            logger.debug(f'Message is deferred for another {remaining} seconds. Republishing it.')
+            await PikaOutgoing.ResendMessage(data)
+            await PikaTools.SafeAcknowledgeMessage(message, logger=logger)
+            return
     await HandleNextStep(pipelineIterator, data)
 
 

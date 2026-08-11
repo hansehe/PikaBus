@@ -14,7 +14,6 @@ DATA_KEY_PROPERTY_BUILDER = 'propertyBuilder'
 DATA_KEY_INCOMING_MESSAGE = 'incomingMessage'
 DATA_KEY_OUTGOING_MESSAGES = 'outgoingMessages'
 DATA_KEY_LOGGER = 'logger'
-DATA_KEY_MAX_DEFERRED_SLEEP = 'maxDeferredSleep'
 
 # An awaitable (channel, exchange, queue) -> None that binds a command destination to the direct
 # exchange at most once per channel. Replaces the per-send queue_bind of PikaBus 1.x.
